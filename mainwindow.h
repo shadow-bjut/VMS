@@ -25,6 +25,7 @@ private slots:
     void onAddVehicle();
     void onEditVehicle();
     void onDeleteVehicle();
+    void onBatchDelete();
     void onSearch();
     void onShowAll();
     void onSaveToFile();
@@ -33,6 +34,10 @@ private slots:
     void onAbout();
     void onVersion();
     void onSetFuelPrice();
+    void onSortByPurchaseDate();
+    void onSortByMileage();
+    void onSortByFC();
+    void onResetSort();
 
 private:
     void setupUI();
@@ -60,6 +65,10 @@ private:
     QButtonGroup *m_searchGroup   = nullptr;
     QPushButton  *m_searchBtn     = nullptr;
     QPushButton  *m_showAllBtn    = nullptr;
+    QPushButton  *m_sortByDateBtn = nullptr;
+    QPushButton  *m_sortByKmBtn   = nullptr;
+    QPushButton  *m_sortByFCBtn   = nullptr;
+    QPushButton  *m_resetSortBtn  = nullptr;
 
     // 表格
     QTableWidget *m_table         = nullptr;
@@ -72,6 +81,11 @@ private:
 
     // 当前显示在表格里的车辆指针列表（用于刷新/选中映射）
     QVector<Vehicle *> m_displayedVehicles;
+
+    // 排序方向标记（true = 升序，false = 降序）
+    bool m_dateAscending = true;
+    bool m_kmAscending   = true;
+    bool m_fcAscending   = true;
 };
 
 #endif // MAINWINDOW_H

@@ -10,6 +10,7 @@
 #include <QStackedWidget>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QSet>
 
 #include "vehicle.h"
 #include "bus.h"
@@ -20,7 +21,8 @@
 class AddVehicleDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit AddVehicleDialog(QWidget *parent = nullptr);
+    explicit AddVehicleDialog(const QStringList &existingIds,
+                              QWidget *parent = nullptr);
 
     // 创建车辆对象（调用方拥有所有权）
     Vehicle *createVehicle() const;
@@ -30,6 +32,7 @@ private slots:
 
 private:
     void setupUI();
+    QString generateDefaultId(int typeIndex) const;
 
     // 通用字段
     QLineEdit      *m_idEdit;
@@ -59,6 +62,9 @@ private:
     QDoubleSpinBox *m_loadSpin;        // 载重量
 
     QDialogButtonBox *m_buttonBox;
+
+    QSet<QString> m_existingIds;   // 已有编号集合
+    QString m_lastAutoId;          // 上次自动生成的编号
 };
 
 #endif // ADDVEHICLEDIALOG_H

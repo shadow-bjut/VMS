@@ -1,0 +1,40 @@
+# Qt build artifacts
+build/
+debug/
+release/
+*.o
+*.obj
+*.exe
+moc_*.cpp
+moc_*.o
+ui_*.h
+qrc_*.cpp
+
+# Makefiles
+Makefile
+Makefile.Debug
+Makefile.Release
+
+# Qt Creator
+.qtcreator/*.user
+*.pro.user*
+
+# qmake
+.qmake.stash
+
+# Object files
+*.Debug
+*.Release
+nul.Debug
+nul.Release
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

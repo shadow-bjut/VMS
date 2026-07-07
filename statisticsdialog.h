@@ -5,14 +5,15 @@
 #include <QLabel>
 #include "vehiclemanager.h"
 
-// 统计信息对话框
+// 统计信息对话框（含图表）
 class StatisticsDialog : public QDialog {
     Q_OBJECT
 public:
     explicit StatisticsDialog(const VehicleManager &manager, QWidget *parent = nullptr);
 
 private:
-    void setupUI(const Statistics &s);
+    void setupUI(const Statistics &s, double avgBusCost, double avgCarCost,
+                 double avgTruckCost);
 };
 
 #endif // STATISTICSDIALOG_H

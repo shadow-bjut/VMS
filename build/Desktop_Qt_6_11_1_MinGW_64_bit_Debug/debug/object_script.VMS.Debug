@@ -1,0 +1,14 @@
+debug/addvehicledialog.o
+debug/bus.o
+debug/car.o
+debug/editvehicledialog.o
+debug/main.o
+debug/mainwindow.o
+debug/statisticsdialog.o
+debug/truck.o
+debug/vehicle.o
+debug/vehiclemanager.o
+debug/moc_addvehicledialog.o
+debug/moc_editvehicledialog.o
+debug/moc_mainwindow.o
+debug/moc_statisticsdialog.o

@@ -32,6 +32,9 @@ public:
     // 按编号查找，找不到返回 nullptr（不转移所有权）
     Vehicle *findById(const QString &id) const;
 
+    // 按车牌号查找，找不到返回 nullptr
+    Vehicle *findByPlateNumber(const QString &plate) const;
+
     // 按制造公司查找（模糊匹配）
     QVector<Vehicle *> findByManufacturer(const QString &keyword) const;
 

@@ -21,23 +21,26 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private slots:
     void onAddVehicle();
     void onEditVehicle();
     void onDeleteVehicle();
+    void onDeleteById();
     void onBatchDelete();
     void onSearch();
     void onShowAll();
+    void onSave();
     void onSaveToFile();
     void onLoadFromFile();
     void onStatistics();
     void onAbout();
     void onVersion();
     void onSetFuelPrice();
-    void onSortByPurchaseDate();
-    void onSortByMileage();
-    void onSortByFC();
-    void onResetSort();
+    void onHeaderClicked(int section);
+    void onTableContextMenu(const QPoint &pos);
 
 private:
     void setupUI();
@@ -65,10 +68,6 @@ private:
     QButtonGroup *m_searchGroup   = nullptr;
     QPushButton  *m_searchBtn     = nullptr;
     QPushButton  *m_showAllBtn    = nullptr;
-    QPushButton  *m_sortByDateBtn = nullptr;
-    QPushButton  *m_sortByKmBtn   = nullptr;
-    QPushButton  *m_sortByFCBtn   = nullptr;
-    QPushButton  *m_resetSortBtn  = nullptr;
 
     // 表格
     QTableWidget *m_table         = nullptr;
@@ -82,10 +81,15 @@ private:
     // 当前显示在表格里的车辆指针列表（用于刷新/选中映射）
     QVector<Vehicle *> m_displayedVehicles;
 
-    // 排序方向标记（true = 升序，false = 降序）
-    bool m_dateAscending = true;
-    bool m_kmAscending   = true;
-    bool m_fcAscending   = true;
+    // 表头排序状态
+    int m_sortColumn = -1;           // 当前排序列，-1 表示未排序
+    Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
+
+    // 当前打开的文件路径（空表示新文件）
+    QString m_currentFilePath;
+
+    // 未保存修改标记
+    bool m_unsavedChanges = false;
 };
 
 #endif // MAINWINDOW_H

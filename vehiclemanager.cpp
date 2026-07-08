@@ -30,6 +30,11 @@ bool VehicleManager::addVehicle(Vehicle *vehicle, QString &errorMsg) {
         errorMsg = QStringLiteral("编号 ") + vehicle->id() + QStringLiteral(" 已存在，添加失败！");
         return false;
     }
+    // 检查车牌号唯一
+    if (!vehicle->plateNumber().isEmpty() && findByPlateNumber(vehicle->plateNumber())) {
+        errorMsg = QStringLiteral("车牌号 ") + vehicle->plateNumber() + QStringLiteral(" 已被使用，添加失败！");
+        return false;
+    }
     m_vehicles.append(vehicle);
     return true;
 }
@@ -52,6 +57,14 @@ bool VehicleManager::removeVehicle(const QString &id) {
 Vehicle *VehicleManager::findById(const QString &id) const {
     for (auto *v : m_vehicles) {
         if (v->id() == id)
+            return v;
+    }
+    return nullptr;
+}
+
+Vehicle *VehicleManager::findByPlateNumber(const QString &plate) const {
+    for (auto *v : m_vehicles) {
+        if (v->plateNumber() == plate)
             return v;
     }
     return nullptr;
@@ -90,6 +103,13 @@ bool VehicleManager::updateVehicle(const QString &oldId, Vehicle *newData, QStri
     // 如果编号变了，检查新编号是否与其他车重复
     if (oldId != newData->id() && findById(newData->id())) {
         errorMsg = QStringLiteral("新编号 ") + newData->id() + QStringLiteral(" 已被使用！");
+        return false;
+    }
+    // 如果车牌号变了，检查新车牌是否与其他车重复
+    if (target->plateNumber() != newData->plateNumber()
+        && !newData->plateNumber().isEmpty()
+        && findByPlateNumber(newData->plateNumber())) {
+        errorMsg = QStringLiteral("新车牌号 ") + newData->plateNumber() + QStringLiteral(" 已被使用！");
         return false;
     }
     // 用 newData 的属性覆盖 target（保持 target 指针不变）

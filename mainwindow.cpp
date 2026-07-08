@@ -15,6 +15,8 @@
 #include <QMenu>
 #include <QFrame>
 #include <QShortcut>
+#include <QCloseEvent>
+#include <QClipboard>
 #include <algorithm>
 // ---------- 构造 / 析构 ----------
 
@@ -28,6 +30,51 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() = default;
+
+// ---------- 关闭事件 ----------
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    if (!m_unsavedChanges) {
+        event->accept();
+        return;
+    }
+
+    QMessageBox::StandardButton btn = QMessageBox::warning(
+        this,
+        QStringLiteral("未保存的修改"),
+        QStringLiteral("当前有未保存的修改，是否保存后再退出？"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Save);
+
+    switch (btn) {
+    case QMessageBox::Save:
+        if (m_currentFilePath.isEmpty()) {
+            // 从未保存过 → 走另存为
+            onSaveToFile();
+            // 如果用户取消了另存为对话框，m_unsavedChanges 仍为 true，不退出
+            if (m_unsavedChanges) {
+                event->ignore();
+                return;
+            }
+        } else {
+            onSave();
+            // 如果保存失败，m_unsavedChanges 仍为 true，不退出
+            if (m_unsavedChanges) {
+                event->ignore();
+                return;
+            }
+        }
+        event->accept();
+        break;
+    case QMessageBox::Discard:
+        event->accept();
+        break;
+    case QMessageBox::Cancel:
+    default:
+        event->ignore();
+        break;
+    }
+}
 
 // ---------- UI 搭建 ----------
 
@@ -45,7 +92,9 @@ void MainWindow::setupMenuBar() {
     QMenu *fileMenu = menuBar()->addMenu(QStringLiteral("文件(&F)"));
     fileMenu->addAction(QStringLiteral("打开(&O)..."), QKeySequence::Open,
                         this, &MainWindow::onLoadFromFile);
-    fileMenu->addAction(QStringLiteral("保存(&S)..."), QKeySequence::Save,
+    fileMenu->addAction(QStringLiteral("保存(&S)"), QKeySequence::Save,
+                        this, &MainWindow::onSave);
+    fileMenu->addAction(QStringLiteral("另存为(&A)..."), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S),
                         this, &MainWindow::onSaveToFile);
     fileMenu->addSeparator();
     fileMenu->addAction(QStringLiteral("退出(&X)"), QKeySequence(Qt::ALT | Qt::Key_F4),
@@ -56,6 +105,7 @@ void MainWindow::setupMenuBar() {
     vehicleMenu->addAction(QStringLiteral("添加车辆(&A)..."), this, &MainWindow::onAddVehicle);
     vehicleMenu->addAction(QStringLiteral("编辑车辆(&E)..."), this, &MainWindow::onEditVehicle);
     vehicleMenu->addAction(QStringLiteral("删除车辆(&D)..."), this, &MainWindow::onDeleteVehicle);
+    vehicleMenu->addAction(QStringLiteral("按编号删除(&I)..."), this, &MainWindow::onDeleteById);
     vehicleMenu->addAction(QStringLiteral("批量删除(&B)..."), QKeySequence::Delete,
                             this, &MainWindow::onBatchDelete);
     vehicleMenu->addAction(QStringLiteral("更新油价(&F)..."), this, &MainWindow::onSetFuelPrice);
@@ -81,10 +131,12 @@ void MainWindow::setupToolBar() {
     toolbar->addAction(QStringLiteral("添加"), this, &MainWindow::onAddVehicle);
     toolbar->addAction(QStringLiteral("编辑"), this, &MainWindow::onEditVehicle);
     toolbar->addAction(QStringLiteral("删除"), this, &MainWindow::onDeleteVehicle);
+    toolbar->addAction(QStringLiteral("按编号删除"), this, &MainWindow::onDeleteById);
     toolbar->addAction(QStringLiteral("批量删除"), this, &MainWindow::onBatchDelete);
     toolbar->addSeparator();
     toolbar->addAction(QStringLiteral("打开"), this, &MainWindow::onLoadFromFile);
-    toolbar->addAction(QStringLiteral("保存"), this, &MainWindow::onSaveToFile);
+    toolbar->addAction(QStringLiteral("保存"), this, &MainWindow::onSave);
+    toolbar->addAction(QStringLiteral("另存为"), this, &MainWindow::onSaveToFile);
     toolbar->addSeparator();
     toolbar->addAction(QStringLiteral("统计"), this, &MainWindow::onStatistics);
 }
@@ -131,35 +183,6 @@ void MainWindow::setupCentralWidget() {
     searchLayout->addStretch();
     mainLayout->addWidget(searchGroupBox);
 
-    // ---------- 排序按钮 ----------
-    QHBoxLayout *sortLayout = new QHBoxLayout();
-    sortLayout->addWidget(new QLabel(QStringLiteral("排序方式：")));
-
-    m_sortByDateBtn = new QPushButton(QStringLiteral("📅 按购买时间 ↑"));
-    connect(m_sortByDateBtn, &QPushButton::clicked,
-            this, &MainWindow::onSortByPurchaseDate);
-    sortLayout->addWidget(m_sortByDateBtn);
-
-    m_sortByKmBtn = new QPushButton(QStringLiteral("🛣️ 按总里程 ↑"));
-    connect(m_sortByKmBtn, &QPushButton::clicked,
-            this, &MainWindow::onSortByMileage);
-    sortLayout->addWidget(m_sortByKmBtn);
-
-    m_sortByFCBtn = new QPushButton(QStringLiteral("⛽ 按耗油量 ↑"));
-    connect(m_sortByFCBtn, &QPushButton::clicked,
-            this, &MainWindow::onSortByFC);
-    sortLayout->addWidget(m_sortByFCBtn);
-
-    sortLayout->addStretch();
-
-    // 恢复默认排序
-    m_resetSortBtn = new QPushButton(QStringLiteral("🔄 恢复默认"));
-    connect(m_resetSortBtn, &QPushButton::clicked,
-            this, &MainWindow::onResetSort);
-    sortLayout->addWidget(m_resetSortBtn);
-
-    mainLayout->addLayout(sortLayout);
-
     // 按回车触发查询
     connect(m_searchEdit, &QLineEdit::returnPressed, this, &MainWindow::onSearch);
 
@@ -187,6 +210,16 @@ void MainWindow::setupCentralWidget() {
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setAlternatingRowColors(true);
     m_table->verticalHeader()->setVisible(false);
+
+    // 点击表头排序
+    m_table->horizontalHeader()->setSortIndicatorShown(true);
+    connect(m_table->horizontalHeader(), &QHeaderView::sectionClicked,
+            this, &MainWindow::onHeaderClicked);
+
+    // 右键上下文菜单
+    m_table->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_table, &QTableWidget::customContextMenuRequested,
+            this, &MainWindow::onTableContextMenu);
 
     // 双击行编辑
     connect(m_table, &QTableWidget::cellDoubleClicked, this, [this](int, int) {
@@ -299,6 +332,7 @@ void MainWindow::onAddVehicle() {
 
     QString errorMsg;
     if (m_manager.addVehicle(v, errorMsg)) {
+        m_unsavedChanges = true;
         refreshTable();
         QMessageBox::information(this, QStringLiteral("成功"),
                                  QStringLiteral("车辆 %1 添加成功！").arg(v->id()));
@@ -330,6 +364,7 @@ void MainWindow::onEditVehicle() {
 
     QString errorMsg;
     if (m_manager.updateVehicle(id, newData, errorMsg)) {
+        m_unsavedChanges = true;
         refreshTable();
         QMessageBox::information(this, QStringLiteral("成功"),
                                  QStringLiteral("车辆信息修改成功！"));
@@ -364,12 +399,68 @@ void MainWindow::onDeleteVehicle() {
     if (btn != QMessageBox::Yes) return;
 
     if (m_manager.removeVehicle(id)) {
+        m_unsavedChanges = true;
         refreshTable();
         QMessageBox::information(this, QStringLiteral("成功"),
                                  QStringLiteral("车辆 %1 已删除！").arg(id));
     } else {
         QMessageBox::warning(this, QStringLiteral("错误"),
                              QStringLiteral("该编号不存在！"));
+    }
+}
+
+// ---------- 槽：按编号删除 ----------
+
+void MainWindow::onDeleteById() {
+    if (m_manager.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("提示"),
+                                 QStringLiteral("车辆信息库为空！"));
+        return;
+    }
+
+    bool ok = false;
+    QString id = QInputDialog::getText(
+        this,
+        QStringLiteral("按编号删除"),
+        QStringLiteral("请输入要删除的车辆编号："),
+        QLineEdit::Normal,
+        QString(),
+        &ok);
+
+    if (!ok || id.trimmed().isEmpty())
+        return;
+
+    id = id.trimmed();
+
+    // 先查找确认存在
+    Vehicle *v = m_manager.findById(id);
+    if (!v) {
+        QMessageBox::warning(this, QStringLiteral("未找到"),
+                             QStringLiteral("编号为 %1 的车辆不存在！").arg(id));
+        return;
+    }
+
+    QMessageBox::StandardButton btn = QMessageBox::question(
+        this, QStringLiteral("确认删除"),
+        QStringLiteral("确定要删除编号为 %1 的车辆吗？\n\n"
+                       "  车牌号: %2\n"
+                       "  类别: %3\n"
+                       "  制造公司: %4")
+            .arg(id, v->plateNumber(), v->typeName(), v->manufacturer()),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+
+    if (btn != QMessageBox::Yes)
+        return;
+
+    if (m_manager.removeVehicle(id)) {
+        m_unsavedChanges = true;
+        refreshTable();
+        QMessageBox::information(this, QStringLiteral("成功"),
+                                 QStringLiteral("车辆 %1 已删除！").arg(id));
+    } else {
+        QMessageBox::warning(this, QStringLiteral("错误"),
+                             QStringLiteral("删除失败，该编号不存在！"));
     }
 }
 
@@ -415,6 +506,8 @@ void MainWindow::onBatchDelete() {
             ++deleted;
     }
 
+    if (deleted > 0)
+        m_unsavedChanges = true;
     refreshTable();
     QMessageBox::information(this, QStringLiteral("完成"),
                              QStringLiteral("成功删除 %1 条记录！").arg(deleted));
@@ -487,6 +580,30 @@ void MainWindow::onShowAll() {
 
 // ---------- 槽：文件操作 ----------
 
+void MainWindow::onSave() {
+    if (m_manager.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("提示"),
+                                 QStringLiteral("车辆信息库为空，无需保存！"));
+        return;
+    }
+
+    // 如果没有打开过文件，则走另存为流程
+    if (m_currentFilePath.isEmpty()) {
+        onSaveToFile();
+        return;
+    }
+
+    QString errorMsg;
+    if (m_manager.saveToFile(m_currentFilePath, errorMsg)) {
+        m_unsavedChanges = false;
+        setWindowTitle(QStringLiteral("车辆管理系统 - %1").arg(m_currentFilePath));
+        QMessageBox::information(this, QStringLiteral("成功"),
+                                 QStringLiteral("车辆信息已保存至:\n%1").arg(m_currentFilePath));
+    } else {
+        QMessageBox::warning(this, QStringLiteral("保存失败"), errorMsg);
+    }
+}
+
 void MainWindow::onSaveToFile() {
     if (m_manager.isEmpty()) {
         QMessageBox::information(this, QStringLiteral("提示"),
@@ -494,13 +611,16 @@ void MainWindow::onSaveToFile() {
         return;
     }
     QString filePath = QFileDialog::getSaveFileName(
-        this, QStringLiteral("保存车辆信息"),
-        QStringLiteral("vehicles.json"),
+        this, QStringLiteral("另存为"),
+        m_currentFilePath.isEmpty() ? QStringLiteral("vehicles.json") : m_currentFilePath,
         QStringLiteral("JSON 文件 (*.json);;所有文件 (*)"));
     if (filePath.isEmpty()) return;
 
     QString errorMsg;
     if (m_manager.saveToFile(filePath, errorMsg)) {
+        m_unsavedChanges = false;
+        m_currentFilePath = filePath;
+        setWindowTitle(QStringLiteral("车辆管理系统 - %1").arg(m_currentFilePath));
         QMessageBox::information(this, QStringLiteral("成功"),
                                  QStringLiteral("车辆信息已保存至:\n%1").arg(filePath));
     } else {
@@ -517,6 +637,9 @@ void MainWindow::onLoadFromFile() {
 
     QString errorMsg;
     if (m_manager.loadFromFile(filePath, errorMsg)) {
+        m_unsavedChanges = false;
+        m_currentFilePath = filePath;
+        setWindowTitle(QStringLiteral("车辆管理系统 - %1").arg(m_currentFilePath));
         refreshTable();
         QMessageBox::information(this, QStringLiteral("成功"),
                                  QStringLiteral("已从文件加载 %1 条车辆记录！")
@@ -545,7 +668,7 @@ void MainWindow::onAbout() {
 //版本号
 void MainWindow::onVersion() {
     QMessageBox::about(this, QStringLiteral("版本"),
-                       QStringLiteral("<h3>v1.0</h3>"
+                       QStringLiteral("<h3>v1.1</h3>"
                                       "<p>制作人：shadow</p>"
                                       "<p>更多详见：https://github.com/shadow-bjut/VMS</p>"
                                     ));
@@ -573,88 +696,163 @@ void MainWindow::onSetFuelPrice() {
     }
 }
 
-// ---------- 槽：按购买时间排序 ----------
+// ---------- 槽：表头点击排序 ----------
 
-void MainWindow::onSortByPurchaseDate() {
-    if (m_displayedVehicles.isEmpty()) return;
+void MainWindow::onHeaderClicked(int section) {
+    if (m_displayedVehicles.isEmpty())
+        return;
 
-    m_dateAscending = !m_dateAscending;  // 切换方向
+    // 同一列再次点击 → 切换升降序；不同列 → 默认升序
+    if (section == m_sortColumn) {
+        m_sortOrder = (m_sortOrder == Qt::AscendingOrder)
+                          ? Qt::DescendingOrder
+                          : Qt::AscendingOrder;
+    } else {
+        m_sortColumn = section;
+        m_sortOrder = Qt::AscendingOrder;
+    }
+
+    // 更新表头排序指示器
+    m_table->horizontalHeader()->setSortIndicator(m_sortColumn, m_sortOrder);
 
     QVector<Vehicle *> sorted = m_displayedVehicles;
-    if (m_dateAscending) {
-        std::sort(sorted.begin(), sorted.end(), [](Vehicle *a, Vehicle *b) {
-            return a->purchaseDate() < b->purchaseDate();  // 从早到晚
+    bool asc = (m_sortOrder == Qt::AscendingOrder);
+
+    switch (section) {
+    case 0: // 编号
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->id() < b->id() : a->id() > b->id();
         });
-        m_sortByDateBtn->setText(QStringLiteral("📅 按购买时间 ↑"));
-    } else {
-        std::sort(sorted.begin(), sorted.end(), [](Vehicle *a, Vehicle *b) {
-            return a->purchaseDate() > b->purchaseDate();  // 从晚到早
+        break;
+    case 1: // 车牌号
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->plateNumber() < b->plateNumber()
+                       : a->plateNumber() > b->plateNumber();
         });
-        m_sortByDateBtn->setText(QStringLiteral("📅 按购买时间 ↓"));
+        break;
+    case 2: // 制造公司
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->manufacturer() < b->manufacturer()
+                       : a->manufacturer() > b->manufacturer();
+        });
+        break;
+    case 3: // 购买时间
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->purchaseDate() < b->purchaseDate()
+                       : a->purchaseDate() > b->purchaseDate();
+        });
+        break;
+    case 4: // 类别
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->typeName() < b->typeName()
+                       : a->typeName() > b->typeName();
+        });
+        break;
+    case 5: // 总公里数
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->totalKm() < b->totalKm()
+                       : a->totalKm() > b->totalKm();
+        });
+        break;
+    case 6: // 耗油量/公里
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->fuelConsumption() < b->fuelConsumption()
+                       : a->fuelConsumption() > b->fuelConsumption();
+        });
+        break;
+    case 7: // 维护费
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->basicMaintenance() < b->basicMaintenance()
+                       : a->basicMaintenance() > b->basicMaintenance();
+        });
+        break;
+    case 8: // 养路费
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->roadFee() < b->roadFee()
+                       : a->roadFee() > b->roadFee();
+        });
+        break;
+    case 9: // 累计总费用
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            return asc ? a->accumulatedCost() < b->accumulatedCost()
+                       : a->accumulatedCost() > b->accumulatedCost();
+        });
+        break;
+    case 10: // 当月总费用
+        std::sort(sorted.begin(), sorted.end(), [this, asc](Vehicle *a, Vehicle *b) {
+            double ma = a->monthlyTotalCost(m_manager.fuelPrice());
+            double mb = b->monthlyTotalCost(m_manager.fuelPrice());
+            return asc ? ma < mb : ma > mb;
+        });
+        break;
+    case 11: // 特殊属性
+        std::sort(sorted.begin(), sorted.end(), [asc](Vehicle *a, Vehicle *b) {
+            auto special = [](Vehicle *v) -> QString {
+                if (auto *bus = dynamic_cast<Bus *>(v))
+                    return QStringLiteral("载客量: %1 人").arg(bus->maxPassengers());
+                if (auto *car = dynamic_cast<Car *>(v))
+                    return car->trunkTypeName();
+                if (auto *truck = dynamic_cast<Truck *>(v))
+                    return QStringLiteral("载重量: %1 吨").arg(truck->maxLoad());
+                return QString();
+            };
+            return asc ? special(a) < special(b) : special(a) > special(b);
+        });
+        break;
+    default:
+        return;
     }
+
     refreshTable(sorted);
 }
 
-// ---------- 槽：按总里程排序 ----------
+// ---------- 槽：右键上下文菜单 ----------
 
-void MainWindow::onSortByMileage() {
-    if (m_displayedVehicles.isEmpty()) return;
+void MainWindow::onTableContextMenu(const QPoint &pos) {
+    QMenu menu(this);
 
-    m_kmAscending = !m_kmAscending;  // 切换方向
+    // 总是可用的操作
+    QAction *addAction = menu.addAction(QStringLiteral("添加车辆"));
+    menu.addSeparator();
 
-    QVector<Vehicle *> sorted = m_displayedVehicles;
-    if (m_kmAscending) {
-        std::sort(sorted.begin(), sorted.end(), [](Vehicle *a, Vehicle *b) {
-            return a->totalKm() < b->totalKm();  // 从小到大
-        });
-        m_sortByKmBtn->setText(QStringLiteral("🛣️ 按总里程 ↑"));
-    } else {
-        std::sort(sorted.begin(), sorted.end(), [](Vehicle *a, Vehicle *b) {
-            return a->totalKm() > b->totalKm();  // 从大到小
-        });
-        m_sortByKmBtn->setText(QStringLiteral("🛣️ 按总里程 ↓"));
+    // 获取鼠标所在行
+    int row = m_table->rowAt(pos.y());
+    QAction *editAction = nullptr;
+    QAction *deleteAction = nullptr;
+    QAction *copyIdAction = nullptr;
+    QAction *copyPlateAction = nullptr;
+
+    if (row >= 0 && row < m_displayedVehicles.size()) {
+        // 如果点击的行不在选中范围内，先选中它
+        if (!m_table->selectionModel()->isRowSelected(row, QModelIndex())) {
+            m_table->selectRow(row);
+        }
+
+        editAction = menu.addAction(QStringLiteral("编辑"));
+        deleteAction = menu.addAction(QStringLiteral("删除"));
+        menu.addSeparator();
+        copyIdAction = menu.addAction(QStringLiteral("复制编号"));
+        copyPlateAction = menu.addAction(QStringLiteral("复制车牌号"));
     }
-    refreshTable(sorted);
-}
 
-// ---------- 槽：按耗油量排序 ----------
+    // 执行选中的操作
+    QAction *chosen = menu.exec(m_table->viewport()->mapToGlobal(pos));
+    if (!chosen)
+        return;
 
-void MainWindow::onSortByFC() {
-    if (m_displayedVehicles.isEmpty()) return;
-
-    m_fcAscending = !m_fcAscending;  // 切换方向
-
-    QVector<Vehicle *> sorted = m_displayedVehicles;
-    if (m_fcAscending) {
-        std::sort(sorted.begin(), sorted.end(), [](Vehicle *a, Vehicle *b) {
-            return a->fuelConsumption() < b->fuelConsumption();  // 从小到大
-        });
-        m_sortByFCBtn->setText(QStringLiteral("⛽ 按耗油量 ↑"));
-    } else {
-        std::sort(sorted.begin(), sorted.end(), [](Vehicle *a, Vehicle *b) {
-            return a->fuelConsumption() > b->fuelConsumption();  // 从大到小
-        });
-        m_sortByFCBtn->setText(QStringLiteral("⛽ 按耗油量 ↓"));
+    if (chosen == addAction) {
+        onAddVehicle();
+    } else if (chosen == editAction) {
+        onEditVehicle();
+    } else if (chosen == deleteAction) {
+        onDeleteVehicle();
+    } else if (chosen == copyIdAction) {
+        QString id = vehicleIdAtTableRow(row);
+        QApplication::clipboard()->setText(id);
+    } else if (chosen == copyPlateAction) {
+        QString id = vehicleIdAtTableRow(row);
+        Vehicle *v = m_manager.findById(id);
+        if (v)
+            QApplication::clipboard()->setText(v->plateNumber());
     }
-    refreshTable(sorted);
 }
-
-// ---------- 槽：恢复默认排序 ----------
-
-void MainWindow::onResetSort() {
-    // 恢复 manager 内部原始顺序
-    refreshTable();
-
-    // 重置方向标记
-    m_dateAscending = true;
-    m_kmAscending   = true;
-    m_fcAscending   = true;
-
-    // 恢复按钮文字
-    m_sortByDateBtn->setText(QStringLiteral("📅 按购买时间 ↑"));
-    m_sortByKmBtn->setText(QStringLiteral("🛣️ 按总里程 ↑"));
-    m_sortByFCBtn->setText(QStringLiteral("⛽ 按耗油量 ↑"));
-}
-
-
-

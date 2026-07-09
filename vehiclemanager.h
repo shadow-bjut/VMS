@@ -35,6 +35,9 @@ public:
     // 按车牌号查找，找不到返回 nullptr
     Vehicle *findByPlateNumber(const QString &plate) const;
 
+    // 按车牌号模糊查找
+    QVector<Vehicle *> findByPlateNumberFuzzy(const QString &keyword) const;
+
     // 按制造公司查找（模糊匹配）
     QVector<Vehicle *> findByManufacturer(const QString &keyword) const;
 

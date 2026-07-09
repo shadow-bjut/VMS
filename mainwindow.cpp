@@ -39,40 +39,36 @@ void MainWindow::closeEvent(QCloseEvent *event) {
         return;
     }
 
-    QMessageBox::StandardButton btn = QMessageBox::warning(
-        this,
-        QStringLiteral("未保存的修改"),
-        QStringLiteral("当前有未保存的修改，是否保存后再退出？"),
-        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-        QMessageBox::Save);
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("未保存的修改"));
+    box.setText(QStringLiteral("当前有未保存的修改，是否保存后再退出？"));
+    box.setIcon(QMessageBox::Warning);
+    QPushButton *saveBtn    = box.addButton(QStringLiteral("保存"),   QMessageBox::AcceptRole);
+    QPushButton *discardBtn = box.addButton(QStringLiteral("不保存"), QMessageBox::DestructiveRole);
+    QPushButton *cancelBtn  = box.addButton(QStringLiteral("再想想"), QMessageBox::RejectRole);
+    box.setDefaultButton(saveBtn);
+    box.exec();
 
-    switch (btn) {
-    case QMessageBox::Save:
+    QAbstractButton *clicked = box.clickedButton();
+    if (clicked == saveBtn) {
         if (m_currentFilePath.isEmpty()) {
-            // 从未保存过 → 走另存为
             onSaveToFile();
-            // 如果用户取消了另存为对话框，m_unsavedChanges 仍为 true，不退出
             if (m_unsavedChanges) {
                 event->ignore();
                 return;
             }
         } else {
             onSave();
-            // 如果保存失败，m_unsavedChanges 仍为 true，不退出
             if (m_unsavedChanges) {
                 event->ignore();
                 return;
             }
         }
         event->accept();
-        break;
-    case QMessageBox::Discard:
+    } else if (clicked == discardBtn) {
         event->accept();
-        break;
-    case QMessageBox::Cancel:
-    default:
+    } else {
         event->ignore();
-        break;
     }
 }
 
@@ -159,15 +155,18 @@ void MainWindow::setupCentralWidget() {
     searchLayout->addWidget(m_searchEdit);
 
     // 单选按钮组
-    m_radioById  = new QRadioButton(QStringLiteral("按编号"));
-    m_radioByMfg = new QRadioButton(QStringLiteral("按制造公司"));
-    m_radioByType = new QRadioButton(QStringLiteral("按类别"));
+    m_radioById    = new QRadioButton(QStringLiteral("按编号"));
+    m_radioByPlate = new QRadioButton(QStringLiteral("按车牌号"));
+    m_radioByMfg   = new QRadioButton(QStringLiteral("按制造公司"));
+    m_radioByType  = new QRadioButton(QStringLiteral("按类别"));
     m_radioById->setChecked(true);
     m_searchGroup = new QButtonGroup(this);
-    m_searchGroup->addButton(m_radioById,  0);
-    m_searchGroup->addButton(m_radioByMfg, 1);
-    m_searchGroup->addButton(m_radioByType, 2);
+    m_searchGroup->addButton(m_radioById,   0);
+    m_searchGroup->addButton(m_radioByPlate, 1);
+    m_searchGroup->addButton(m_radioByMfg,  2);
+    m_searchGroup->addButton(m_radioByType, 3);
     searchLayout->addWidget(m_radioById);
+    searchLayout->addWidget(m_radioByPlate);
     searchLayout->addWidget(m_radioByMfg);
     searchLayout->addWidget(m_radioByType);
 
@@ -522,7 +521,7 @@ void MainWindow::onSearch() {
         return;
     }
     QVector<Vehicle *> result;
-    int mode = m_searchGroup->checkedId(); // 0=ID, 1=Mfg, 2=Type
+    int mode = m_searchGroup->checkedId(); // 0=ID, 1=Plate, 2=Mfg, 3=Type
 
     switch (mode) {
     case 0: { // 按编号
@@ -536,7 +535,16 @@ void MainWindow::onSearch() {
         }
         break;
     }
-    case 1: { // 按制造公司
+    case 1: { // 按车牌号
+        result = m_manager.findByPlateNumberFuzzy(keyword);
+        if (result.isEmpty()) {
+            QMessageBox::information(this, QStringLiteral("查询结果"),
+                                     QStringLiteral("未找到匹配的车牌号！"));
+            return;
+        }
+        break;
+    }
+    case 2: { // 按制造公司
         result = m_manager.findByManufacturer(keyword);
         if (result.isEmpty()) {
             QMessageBox::information(this, QStringLiteral("查询结果"),
@@ -545,7 +553,7 @@ void MainWindow::onSearch() {
         }
         break;
     }
-    case 2: { // 按类别
+    case 3: { // 按类别
         QString t = keyword;
         VehicleType vt;
         if (t.contains(QStringLiteral("客车")) || t.contains(QStringLiteral("巴士"))) {
@@ -668,7 +676,7 @@ void MainWindow::onAbout() {
 //版本号
 void MainWindow::onVersion() {
     QMessageBox::about(this, QStringLiteral("版本"),
-                       QStringLiteral("<h3>v1.1</h3>"
+                       QStringLiteral("<h3>v1.2</h3>"
                                       "<p>制作人：shadow</p>"
                                       "<p>更多详见：https://github.com/shadow-bjut/VMS</p>"
                                     ));
@@ -690,6 +698,7 @@ void MainWindow::onSetFuelPrice() {
 
     if (ok) {
         m_manager.setFuelPrice(newPrice);
+        m_unsavedChanges = true;
         refreshTable();  // 刷新表格（因为当月总费用依赖油价）
         QMessageBox::information(this, QStringLiteral("成功"),
                                  QStringLiteral("油价已更新为 %1 元/升！").arg(newPrice));

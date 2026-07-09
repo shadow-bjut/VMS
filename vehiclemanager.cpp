@@ -70,6 +70,15 @@ Vehicle *VehicleManager::findByPlateNumber(const QString &plate) const {
     return nullptr;
 }
 
+QVector<Vehicle *> VehicleManager::findByPlateNumberFuzzy(const QString &keyword) const {
+    QVector<Vehicle *> result;
+    for (auto *v : m_vehicles) {
+        if (v->plateNumber().contains(keyword, Qt::CaseInsensitive))
+            result.append(v);
+    }
+    return result;
+}
+
 QVector<Vehicle *> VehicleManager::findByManufacturer(const QString &keyword) const {
     QVector<Vehicle *> result;
     for (auto *v : m_vehicles) {
@@ -163,7 +172,12 @@ bool VehicleManager::saveToFile(const QString &filePath, QString &errorMsg) cons
         obj["vehicleType"] = vehicleTypeToString(v->vehicleType());
         arr.append(obj);
     }
-    QJsonDocument doc(arr);
+
+    QJsonObject root;
+    root["fuelPrice"] = m_fuelPrice;
+    root["vehicles"] = arr;
+
+    QJsonDocument doc(root);
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -190,13 +204,23 @@ bool VehicleManager::loadFromFile(const QString &filePath, QString &errorMsg) {
         errorMsg = QStringLiteral("JSON 解析失败: ") + parseError.errorString();
         return false;
     }
-    if (!doc.isArray()) {
-        errorMsg = QStringLiteral("文件格式错误：顶层不是数组！");
+
+    clearAll(); // 清除现有数据
+
+    // 兼容旧格式（顶层为数组）和新格式（顶层为对象，含 fuelPrice 和 vehicles）
+    QJsonArray arr;
+    if (doc.isArray()) {
+        // 旧格式：纯数组，油价使用默认值
+        arr = doc.array();
+    } else if (doc.isObject()) {
+        QJsonObject root = doc.object();
+        m_fuelPrice = root["fuelPrice"].toDouble(m_fuelPrice);
+        arr = root["vehicles"].toArray();
+    } else {
+        errorMsg = QStringLiteral("文件格式错误：顶层必须是数组或对象！");
         return false;
     }
 
-    clearAll(); // 清除现有数据
-    const QJsonArray arr = doc.array();
     for (const QJsonValue &val : arr) {
         if (!val.isObject()) continue;
         QJsonObject obj = val.toObject();

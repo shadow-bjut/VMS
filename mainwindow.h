@@ -4,7 +4,6 @@
 #include <QMainWindow>
 #include <QTableWidget>
 #include <QLineEdit>
-#include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QRadioButton>
@@ -63,6 +62,7 @@ private:
     // 搜索组件
     QLineEdit    *m_searchEdit    = nullptr;
     QRadioButton *m_radioById     = nullptr;
+    QRadioButton *m_radioByPlate  = nullptr;
     QRadioButton *m_radioByMfg    = nullptr;
     QRadioButton *m_radioByType   = nullptr;
     QButtonGroup *m_searchGroup   = nullptr;

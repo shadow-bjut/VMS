@@ -122,6 +122,7 @@ void EditVehicleDialog::setupUI(const Vehicle *v) {
     m_buttonBox = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     m_buttonBox->button(QDialogButtonBox::Ok)->setText(QStringLiteral("保存修改"));
+    m_buttonBox->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消修改"));
     connect(m_buttonBox, &QDialogButtonBox::accepted, this, [this]() {
         if (m_idEdit->text().trimmed().isEmpty()) {
             QMessageBox::warning(this, QStringLiteral("输入错误"),
@@ -130,7 +131,7 @@ void EditVehicleDialog::setupUI(const Vehicle *v) {
         }
 
         QString plate = m_plateEdit->text().trimmed();
-        if (plate.length() < 7 || plate.length() > 8) {
+        if (!plate.isEmpty() && (plate.length() < 7 || plate.length() > 8)) {
             QMessageBox::warning(this, QStringLiteral("输入错误"),
                                  QStringLiteral("车牌号必须为7到8个字符！"));
             return;
@@ -180,6 +181,12 @@ void EditVehicleDialog::populateFields(const Vehicle *v) {
 
 void EditVehicleDialog::onTypeChanged(int index) {
     m_stacked->setCurrentIndex(index);
+    // 切换类别时自动更新维护费默认值
+    switch (index) {
+    case 0: m_maintenanceSpin->setValue(2000.0); break;  // 客车
+    case 1: m_maintenanceSpin->setValue(1000.0); break;  // 轿车
+    case 2: m_maintenanceSpin->setValue(1500.0); break;  // 卡车
+    }
 }
 
 Vehicle *EditVehicleDialog::createVehicle() const {

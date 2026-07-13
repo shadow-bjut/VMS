@@ -1,0 +1,201 @@
+// VMS 数据模型层 — Vehicle 继承体系核心流程图
+// 渲染命令: dot -Tpng docs/vehicle-model-flow.dot -o docs/vehicle-model-flow.png
+
+digraph VMS_VehicleModel {
+    // ========== 全局设置 ==========
+    rankdir=TB;
+    fontname="Noto Sans CJK SC";
+    bgcolor="#FFFFFF";
+
+    node [fontname="Noto Sans CJK SC", fontsize=11];
+    edge [fontname="Noto Sans CJK SC", fontsize=10, penwidth=1.8];
+
+    // ========== 第一部分：对象构造流程 ==========
+
+    // --- 开始 ---
+    start_create [label="开始\n构造 Vehicle 对象", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=2.0];
+
+    // --- 判断：要创建哪种类型? ---
+    which_type [label="需要创建\n哪种车辆?", shape="diamond"];
+
+    // --- 三个子类构造函数 ---
+    create_bus [label="Bus 构造函数\nBus()", shape="box"];
+    create_car [label="Car 构造函数\nCar()", shape="box"];
+    create_truck [label="Truck 构造函数\nTruck()", shape="box"];
+
+    // --- 基类构造函数调用 ---
+    bus_base [label="调用基类构造函数\nVehicle(VehicleType::Bus, 2000.0)\n· m_vehicleType = Bus\n· m_basicMaintenance = 2000\n· m_purchaseDate = 当前日期\n· 其他成员 = 默认值(0)", shape="box"];
+    car_base [label="调用基类构造函数\nVehicle(VehicleType::Car, 1000.0)\n· m_vehicleType = Car\n· m_basicMaintenance = 1000\n· m_purchaseDate = 当前日期\n· 其他成员 = 默认值(0)", shape="box"];
+    truck_base [label="调用基类构造函数\nVehicle(VehicleType::Truck, 1500.0)\n· m_vehicleType = Truck\n· m_basicMaintenance = 1500\n· m_purchaseDate = 当前日期\n· 其他成员 = 默认值(0)", shape="box"];
+
+    // --- 子类专属初始化 ---
+    bus_init [label="Bus 专属成员初始化\n· m_maxPassengers = 0", shape="box"];
+    car_init [label="Car 专属成员初始化\n· m_trunkType = 3 (默认三厢)", shape="box"];
+    truck_init [label="Truck 专属成员初始化\n· m_maxLoad = 0.0 (吨)", shape="box"];
+
+    // --- 汇聚 ---
+    obj_ready [label="Vehicle 对象构造完成\n(通过基类指针/引用\n进行多态操作)", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // --- 构造连线 ---
+    start_create -> which_type;
+
+    which_type -> create_bus  [label=" 大客车", penwidth=1.8];
+    which_type -> create_car  [label=" 小轿车", penwidth=1.8];
+    which_type -> create_truck [label=" 卡车", penwidth=1.8];
+
+    create_bus -> bus_base;
+    create_car -> car_base;
+    create_truck -> truck_base;
+
+    bus_base -> bus_init;
+    car_base -> car_init;
+    truck_base -> truck_init;
+
+    bus_init -> obj_ready;
+    car_init -> obj_ready;
+    truck_init -> obj_ready;
+
+    // ========== 第二部分：虚函数多态调用 ==========
+
+    call_virtual [label="对 Vehicle* 指针\n调用虚函数", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=2.0];
+
+    // --- 哪个虚函数? ---
+    which_method [label="调用哪个\n虚函数?", shape="diamond"];
+
+    // --- monthlyTotalCost ---
+    dispatch_cost [label="虚函数表 (vtable) 分发\n→ monthlyTotalCost(fuelPrice)", shape="box"];
+
+    cost_bus [label="Bus::monthlyTotalCost()\nreturn fuelPrice × m_fuelConsumption + 2000.0", shape="box"];
+    cost_car [label="Car::monthlyTotalCost()\nreturn fuelPrice × m_fuelConsumption + 1000.0", shape="box"];
+    cost_truck [label="Truck::monthlyTotalCost()\nreturn fuelPrice × m_fuelConsumption + 1500.0", shape="box"];
+
+    // --- typeName ---
+    dispatch_type [label="虚函数表 (vtable) 分发\n→ typeName()", shape="box"];
+
+    type_bus [label="Bus::typeName()\nreturn QStringLiteral(\"大客车\")", shape="box"];
+    type_car [label="Car::typeName()\nreturn QStringLiteral(\"小轿车\")", shape="box"];
+    type_truck [label="Truck::typeName()\nreturn QStringLiteral(\"卡车\")", shape="box"];
+
+    // --- toJson ---
+    dispatch_json [label="虚函数表 (vtable) 分发\n→ toJson()", shape="box"];
+    // (toJson 详细流程见第三部分)
+
+    // --- fromJson ---
+    dispatch_fromjson [label="虚函数表 (vtable) 分发\n→ fromJson(obj)", shape="box"];
+    // (fromJson 详细流程见第四部分)
+
+    result_return [label="返回调用结果\n(多态,运行时决定\n具体实现)", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // --- 多态连线 ---
+    obj_ready -> call_virtual [style=dashed, penwidth=1.5, color="#888888"];
+    call_virtual -> which_method;
+
+    which_method -> dispatch_cost     [label=" monthlyTotalCost", penwidth=1.8];
+    which_method -> dispatch_type     [label=" typeName", penwidth=1.8];
+    which_method -> dispatch_json     [label=" toJson", penwidth=1.8];
+    which_method -> dispatch_fromjson [label=" fromJson", penwidth=1.8];
+
+    // cost 分发
+    dispatch_cost -> cost_bus   [label=" 运行时类型=Bus", penwidth=1.8];
+    dispatch_cost -> cost_car   [label=" 运行时类型=Car", penwidth=1.8];
+    dispatch_cost -> cost_truck [label=" 运行时类型=Truck", penwidth=1.8];
+
+    // typeName 分发
+    dispatch_type -> type_bus   [label=" 运行时类型=Bus", penwidth=1.8];
+    dispatch_type -> type_car   [label=" 运行时类型=Car", penwidth=1.8];
+    dispatch_type -> type_truck [label=" 运行时类型=Truck", penwidth=1.8];
+
+    // 虚函数结果汇总
+    cost_bus -> result_return;
+    cost_car -> result_return;
+    cost_truck -> result_return;
+    type_bus -> result_return;
+    type_car -> result_return;
+    type_truck -> result_return;
+
+    // ========== 第三部分：JSON 序列化链 (toJson) ==========
+
+    json_start [label="序列化流程\n子类::toJson()", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    base_json [label="Vehicle::toJson()\n填充通用字段:\n· id, plateNumber, manufacturer\n· purchaseDate (ISO 格式)\n· vehicleType (转中文)\n· totalKm, fuelConsumption\n· basicMaintenance, roadFee\n· accumulatedCost", shape="box"];
+
+    which_subclass_json [label="当前对象\n类型?", shape="diamond"];
+
+    bus_json [label="Bus::toJson()\n在基类 JSON 基础上\n追加 obj[\"maxPassengers\"] = m_maxPassengers", shape="box"];
+    car_json [label="Car::toJson()\n在基类 JSON 基础上\n追加 obj[\"trunkType\"] = m_trunkType", shape="box"];
+    truck_json [label="Truck::toJson()\n在基类 JSON 基础上\n追加 obj[\"maxLoad\"] = m_maxLoad", shape="box"];
+
+    json_done [label="返回完整 QJsonObject\n(基类字段 + 子类特有字段)", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // --- 序列化连线 ---
+    dispatch_json -> json_start [style=dashed, penwidth=1.5, color="#888888"];
+    json_start -> base_json [label=" 第一步\n调用基类", penwidth=1.8];
+    base_json -> which_subclass_json;
+
+    which_subclass_json -> bus_json   [label=" Bus", penwidth=1.8];
+    which_subclass_json -> car_json   [label=" Car", penwidth=1.8];
+    which_subclass_json -> truck_json [label=" Truck", penwidth=1.8];
+
+    bus_json -> json_done;
+    car_json -> json_done;
+    truck_json -> json_done;
+
+    // ========== 第四部分：JSON 反序列化链 (fromJson) ==========
+
+    fromjson_start [label="反序列化流程\n子类::fromJson(obj)", shape="box", style="rounded,filled", fillcolor="#FCE4EC", penwidth=2.0];
+
+    base_fromjson [label="Vehicle::fromJson(obj)\n读取通用字段:\n· obj[\"id\"].toString()\n· obj[\"plateNumber\"].toString()\n· obj[\"manufacturer\"].toString()\n· QDate::fromString(...)\n· obj[\"vehicleType\"] → 枚举\n· obj[\"totalKm\"].toDouble()\n· obj[\"fuelConsumption\"].toDouble()\n· obj[\"basicMaintenance\"].toDouble()\n· obj[\"roadFee\"].toDouble()\n· obj[\"accumulatedCost\"].toDouble()", shape="box"];
+
+    which_subclass_fromjson [label="当前对象\n类型?", shape="diamond"];
+
+    bus_fromjson [label="Bus::fromJson(obj)\n读取 m_maxPassengers =\nobj[\"maxPassengers\"].toInt()", shape="box"];
+    car_fromjson [label="Car::fromJson(obj)\n读取 m_trunkType =\nobj[\"trunkType\"].toInt(3)", shape="box"];
+    truck_fromjson [label="Truck::fromJson(obj)\n读取 m_maxLoad =\nobj[\"maxLoad\"].toDouble()", shape="box"];
+
+    fromjson_done [label="对象属性恢复完成\n(基类字段 + 子类特有字段)", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // --- 反序列化连线 ---
+    dispatch_fromjson -> fromjson_start [style=dashed, penwidth=1.5, color="#888888"];
+    fromjson_start -> base_fromjson [label=" 第一步\n调用基类", penwidth=1.8];
+    base_fromjson -> which_subclass_fromjson;
+
+    which_subclass_fromjson -> bus_fromjson   [label=" Bus", penwidth=1.8];
+    which_subclass_fromjson -> car_fromjson   [label=" Car", penwidth=1.8];
+    which_subclass_fromjson -> truck_fromjson [label=" Truck", penwidth=1.8];
+
+    bus_fromjson -> fromjson_done;
+    car_fromjson -> fromjson_done;
+    truck_fromjson -> fromjson_done;
+
+    // ========== 第五部分：类型枚举转换 ==========
+
+    convert_start [label="类型枚举 ↔ 字符串\n转换工具函数", shape="box", style="rounded,filled", fillcolor="#FFF3E0", penwidth=2.0];
+
+    convert_direction [label="转换\n方向?", shape="diamond"];
+
+    to_string [label="vehicleTypeToString(type)\nswitch (type):\n· Bus   → \"大客车\"\n· Car   → \"小轿车\"\n· Truck → \"卡车\"\ndefault → \"未知\"", shape="box"];
+
+    from_string [label="stringToVehicleType(str)\nif str == \"大客车\" || \"Bus\" → Bus\nif str == \"小轿车\" || \"Car\" → Car\nif str == \"卡车\"   || \"Truck\" → Truck\nfallback → VehicleType::Car", shape="box"];
+
+    convert_done [label="返回转换结果\n(QString 或 VehicleType)", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // --- 转换连线 ---
+    convert_start -> convert_direction;
+
+    convert_direction -> to_string   [label=" 枚举→字符串\n(序列化时使用)", penwidth=1.8];
+    convert_direction -> from_string [label=" 字符串→枚举\n(反序列化时使用)", penwidth=1.8];
+
+    to_string -> convert_done;
+    from_string -> convert_done;
+
+    // ========== 图注 ==========
+    {
+        rank=sink;
+        legend_start [label="开始/结束", shape="box", style="rounded,filled", fillcolor="#C8E6C9", fontsize=9, width=1.2];
+        legend_process [label="处理步骤", shape="box", fontsize=9, width=1.2];
+        legend_decision [label="判断分支", shape="diamond", fontsize=9, width=1.2];
+        legend_subflow [label="子流程入口", shape="box", style="rounded,filled", fillcolor="#FFF9C4", fontsize=9, width=1.2];
+
+        legend_start -> legend_process -> legend_decision -> legend_subflow [style=invis];
+    }
+}

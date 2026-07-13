@@ -1,0 +1,325 @@
+// VMS 数据管理层 — VehicleManager 核心业务流程图
+// 渲染命令: dot -Tpng docs/vehiclemanager-flow.dot -o docs/vehiclemanager-flow.png
+
+digraph VMS_VehicleManager {
+    // ========== 全局设置 ==========
+    rankdir=TB;
+    fontname="Noto Sans CJK SC";
+    bgcolor="#FFFFFF";
+
+    node [fontname="Noto Sans CJK SC", fontsize=11];
+    edge [fontname="Noto Sans CJK SC", fontsize=10, penwidth=1.8];
+
+    // ========== 操作入口 ==========
+
+    entry [label="VehicleManager\n接收操作请求", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=2.0];
+
+    which_op [label="操作\n类型?", shape="diamond"];
+
+    // ========== 第一部分：addVehicle() 添加车辆 ==========
+
+    add_start [label="addVehicle(vehicle, errorMsg)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    check_null [label="vehicle\n== nullptr ?", shape="diamond"];
+
+    add_err_null [label="errorMsg = \"车辆对象为空！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    check_full [label="isFull() ?\n(当前数量 >= 最大容量)", shape="diamond"];
+
+    add_err_full [label="errorMsg = \"车辆信息库已满，\n无法添加！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    check_id_exist [label="findById(vehicle->id())\n!= nullptr ?\n(编号已存在)", shape="diamond"];
+
+    add_err_id [label="errorMsg = \"编号 XX 已存在，\n添加失败！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    check_plate_empty [label="vehicle->plateNumber()\n.isEmpty() ?", shape="diamond"];
+
+    check_plate_exist [label="findByPlateNumber(\nvehicle->plateNumber())\n!= nullptr ?", shape="diamond"];
+
+    add_err_plate [label="errorMsg = \"车牌号 XX 已被使用，\n添加失败！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    do_append [label="m_vehicles.append(vehicle)\n将车辆指针加入容器\nreturn true", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // --- addVehicle 连线 ---
+    add_start -> check_null;
+
+    check_null -> add_err_null [label=" 是", penwidth=1.8];
+    check_null -> check_full   [label=" 否", penwidth=1.8];
+
+    check_full -> add_err_full [label=" 是", penwidth=1.8];
+    check_full -> check_id_exist [label=" 否", penwidth=1.8];
+
+    check_id_exist -> add_err_id [label=" 是", penwidth=1.8];
+    check_id_exist -> check_plate_empty [label=" 否", penwidth=1.8];
+
+    check_plate_empty -> do_append [label=" 是\n(无车牌跳过检查)", penwidth=1.8];
+    check_plate_empty -> check_plate_exist [label=" 否", penwidth=1.8];
+
+    check_plate_exist -> add_err_plate [label=" 是", penwidth=1.8];
+    check_plate_exist -> do_append [label=" 否", penwidth=1.8];
+
+    // ========== 第二部分：updateVehicle() 更新车辆 ==========
+
+    update_start [label="updateVehicle(oldId,\nnewData, errorMsg)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    upd_check_null [label="newData\n== nullptr ?", shape="diamond"];
+
+    upd_err_null [label="errorMsg = \"更新数据为空！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    upd_find_target [label="target = findById(oldId)", shape="box"];
+
+    upd_target_found [label="target\n!= nullptr ?", shape="diamond"];
+
+    upd_err_notfound [label="errorMsg = \"编号 XX 不存在！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    upd_id_changed [label="oldId !=\nnewData->id() ?\n(编号已修改)", shape="diamond"];
+
+    upd_check_newid [label="findById(newData->id())\n!= nullptr ?\n(新编号冲突)", shape="diamond"];
+
+    upd_err_newid [label="errorMsg = \"新编号 XX\n已被使用！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    upd_plate_changed [label="target->plateNumber() !=\nnewData->plateNumber()\n&& !newData->plateNumber()\n.isEmpty() ?", shape="diamond"];
+
+    upd_check_newplate [label="findByPlateNumber(\nnewData->plateNumber())\n!= nullptr ?", shape="diamond"];
+
+    upd_err_newplate [label="errorMsg = \"新车牌号 XX\n已被使用！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    upd_do_copy [label="JSON 深拷贝替换:\nQJsonObject json = newData->toJson()\ntarget->fromJson(json)\n(保持 target 指针不变)\nreturn true", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // --- updateVehicle 连线 ---
+    update_start -> upd_check_null;
+
+    upd_check_null -> upd_err_null  [label=" 是", penwidth=1.8];
+    upd_check_null -> upd_find_target [label=" 否", penwidth=1.8];
+
+    upd_find_target -> upd_target_found;
+
+    upd_target_found -> upd_err_notfound [label=" 否", penwidth=1.8];
+    upd_target_found -> upd_id_changed [label=" 是", penwidth=1.8];
+
+    upd_id_changed -> upd_plate_changed [label=" 否\n(编号未改)", penwidth=1.8];
+    upd_id_changed -> upd_check_newid [label=" 是", penwidth=1.8];
+
+    upd_check_newid -> upd_err_newid [label=" 是\n(冲突)", penwidth=1.8];
+    upd_check_newid -> upd_plate_changed [label=" 否", penwidth=1.8];
+
+    upd_plate_changed -> upd_do_copy [label=" 否\n(车牌未改)", penwidth=1.8];
+    upd_plate_changed -> upd_check_newplate [label=" 是", penwidth=1.8];
+
+    upd_check_newplate -> upd_err_newplate [label=" 是\n(冲突)", penwidth=1.8];
+    upd_check_newplate -> upd_do_copy [label=" 否", penwidth=1.8];
+
+    // ========== 第三部分：removeVehicle() 删除车辆 ==========
+
+    remove_start [label="removeVehicle(id)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    remove_loop [label="遍历 m_vehicles\ni = 0 .. size-1", shape="box"];
+
+    remove_check [label="m_vehicles[i]->id()\n== id ?", shape="diamond"];
+
+    remove_next [label="i++ 继续遍历", shape="box"];
+
+    remove_notfound [label="遍历完毕\n未找到匹配项\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    remove_do [label="delete m_vehicles[i]\n(释放内存)\nm_vehicles.removeAt(i)\nreturn true", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // --- removeVehicle 连线 ---
+    remove_start -> remove_loop;
+
+    remove_loop -> remove_check;
+
+    remove_check -> remove_next [label=" 否", penwidth=1.8];
+    remove_check -> remove_do [label=" 是", penwidth=1.8];
+
+    remove_next -> remove_check [label=" 还有元素", penwidth=1.8];
+    remove_next -> remove_notfound [label=" 遍历结束", penwidth=1.8];
+
+    // ========== 第四部分：查找操作 ==========
+
+    search_start [label="查找操作", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    search_type [label="查找\n方式?", shape="diamond"];
+
+    // findById
+    find_id [label="findById(id)\n遍历 m_vehicles\n精确匹配 id\n返回 Vehicle* 或 nullptr", shape="box"];
+
+    // findByPlateNumber
+    find_plate [label="findByPlateNumber(plate)\n遍历 m_vehicles\n精确匹配 plateNumber\n返回 Vehicle* 或 nullptr", shape="box"];
+
+    // findByPlateNumberFuzzy
+    find_plate_fuzzy [label="findByPlateNumberFuzzy(keyword)\n遍历 m_vehicles\nplateNumber.contains(keyword,\nCaseInsensitive)\n返回 QVector<Vehicle*>", shape="box"];
+
+    // findByManufacturer
+    find_mfg [label="findByManufacturer(keyword)\n遍历 m_vehicles\nmanufacturer.contains(keyword,\nCaseInsensitive)\n返回 QVector<Vehicle*>", shape="box"];
+
+    // findByType
+    find_type [label="findByType(type)\n遍历 m_vehicles\nvehicleType() == type\n返回 QVector<Vehicle*>", shape="box"];
+
+    search_result [label="返回查找结果\n(单个指针 / 结果集)", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // --- 查找连线 ---
+    search_start -> search_type;
+
+    search_type -> find_id         [label=" 按编号\n(精确)", penwidth=1.8];
+    search_type -> find_plate      [label=" 按车牌\n(精确)", penwidth=1.8];
+    search_type -> find_plate_fuzzy [label=" 按车牌\n(模糊)", penwidth=1.8];
+    search_type -> find_mfg        [label=" 按制造商\n(模糊)", penwidth=1.8];
+    search_type -> find_type       [label=" 按类别", penwidth=1.8];
+
+    find_id -> search_result;
+    find_plate -> search_result;
+    find_plate_fuzzy -> search_result;
+    find_mfg -> search_result;
+    find_type -> search_result;
+
+    // ========== 第五部分：saveToFile() 保存到文件 ==========
+
+    save_start [label="saveToFile(filePath,\nerrorMsg)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    save_build_array [label="遍历 m_vehicles\n对每个 Vehicle* 调用 toJson()\n构建 QJsonArray", shape="box"];
+
+    save_build_root [label="构建顶层 QJsonObject:\n· root[\"fuelPrice\"] = m_fuelPrice\n· root[\"maxCapacity\"] = m_maxCapacity\n· root[\"vehicles\"] = jsonArray", shape="box"];
+
+    save_open [label="QFile file(filePath)\nfile.open(WriteOnly | Text)", shape="box"];
+
+    save_open_ok [label="file.open()\n成功?", shape="diamond"];
+
+    save_err [label="errorMsg = \"无法打开文件\nXX 进行写入！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    save_write [label="file.write(\ndoc.toJson(Indented))\nfile.close()\nreturn true", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // --- saveToFile 连线 ---
+    save_start -> save_build_array;
+    save_build_array -> save_build_root;
+    save_build_root -> save_open;
+    save_open -> save_open_ok;
+
+    save_open_ok -> save_err   [label=" 失败", penwidth=1.8];
+    save_open_ok -> save_write [label=" 成功", penwidth=1.8];
+
+    // ========== 第六部分：loadFromFile() 从文件加载 ==========
+
+    load_start [label="loadFromFile(filePath,\nerrorMsg)", shape="box", style="rounded,filled", fillcolor="#FCE4EC", penwidth=2.0];
+
+    load_open [label="QFile file(filePath)\nfile.open(ReadOnly | Text)", shape="box"];
+
+    load_open_ok [label="file.open()\n成功?", shape="diamond"];
+
+    load_err_open [label="errorMsg = \"无法打开文件\nXX 进行读取！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    load_read [label="QByteArray data = file.readAll()\nfile.close()", shape="box"];
+
+    load_parse [label="QJsonDocument::fromJson(data,\n&parseError)", shape="box"];
+
+    load_parse_ok [label="parseError.error\n== NoError ?", shape="diamond"];
+
+    load_err_parse [label="errorMsg = \"JSON 解析失败:\"\n+ parseError.errorString()\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    load_clear [label="clearAll()\n清除现有数据\n(delete 所有 Vehicle*)", shape="box"];
+
+    load_format [label="doc.isArray()\n还是\ndoc.isObject() ?", shape="diamond"];
+
+    load_old_format [label="旧格式 (纯数组):\narr = doc.array()\n油价使用默认值 7.5\n容量使用默认值 100", shape="box"];
+
+    load_new_format [label="新格式 (对象):\nroot = doc.object()\nm_fuelPrice = root[\"fuelPrice\"]\nm_maxCapacity = root[\"maxCapacity\"]\narr = root[\"vehicles\"]", shape="box"];
+
+    load_err_format [label="errorMsg = \"文件格式错误：\n顶层必须是数组或对象！\"\nreturn false", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    load_loop [label="遍历 arr 中每个 JSON 元素", shape="box"];
+
+    load_read_type [label="读取 obj[\"vehicleType\"]\nstringToVehicleType()\n确定车辆类型", shape="box"];
+
+    load_create [label="根据类型 new:\n· Bus   → new Bus()\n· Car   → new Car()\n· Truck → new Truck()", shape="box"];
+
+    load_populate [label="v->fromJson(obj)\n填充对象属性\nm_vehicles.append(v)", shape="box"];
+
+    load_more [label="arr 中还有\n更多元素?", shape="diamond"];
+
+    load_done [label="加载完成\nreturn true", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // --- loadFromFile 连线 ---
+    load_start -> load_open;
+    load_open -> load_open_ok;
+
+    load_open_ok -> load_err_open [label=" 失败", penwidth=1.8];
+    load_open_ok -> load_read [label=" 成功", penwidth=1.8];
+
+    load_read -> load_parse;
+    load_parse -> load_parse_ok;
+
+    load_parse_ok -> load_err_parse [label=" 有错误", penwidth=1.8];
+    load_parse_ok -> load_clear [label=" 无错误", penwidth=1.8];
+
+    load_clear -> load_format;
+
+    load_format -> load_old_format [label=" 顶层是数组\n(兼容旧格式)", penwidth=1.8];
+    load_format -> load_new_format [label=" 顶层是对象\n(新格式)", penwidth=1.8];
+    load_format -> load_err_format [label=" 其他", penwidth=1.8];
+
+    load_old_format -> load_loop;
+    load_new_format -> load_loop;
+
+    load_loop -> load_read_type;
+    load_read_type -> load_create;
+    load_create -> load_populate;
+    load_populate -> load_more;
+
+    load_more -> load_loop [label=" 是", penwidth=1.8];
+    load_more -> load_done [label=" 否", penwidth=1.8];
+
+    // ========== 第七部分：getStatistics() 统计 ==========
+
+    stats_start [label="getStatistics()", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=2.0];
+
+    stats_init [label="Statistics s\ns.total = m_vehicles.size()\ns.busCount = s.carCount =\ns.truckCount = 0", shape="box"];
+
+    stats_loop [label="遍历 m_vehicles\n对每个 Vehicle*", shape="box"];
+
+    stats_switch [label="v->vehicleType()\n类型?", shape="diamond"];
+
+    stats_bus [label="s.busCount++", shape="box"];
+    stats_car [label="s.carCount++", shape="box"];
+    stats_truck [label="s.truckCount++", shape="box"];
+
+    stats_more [label="还有\n更多元素?", shape="diamond"];
+
+    stats_return [label="return s\n(包含各类型计数)", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // --- statistics 连线 ---
+    stats_start -> stats_init;
+    stats_init -> stats_loop;
+    stats_loop -> stats_switch;
+
+    stats_switch -> stats_bus   [label=" Bus", penwidth=1.8];
+    stats_switch -> stats_car   [label=" Car", penwidth=1.8];
+    stats_switch -> stats_truck [label=" Truck", penwidth=1.8];
+
+    stats_bus -> stats_more;
+    stats_car -> stats_more;
+    stats_truck -> stats_more;
+
+    stats_more -> stats_loop [label=" 是", penwidth=1.8];
+    stats_more -> stats_return [label=" 否", penwidth=1.8];
+
+    // ========== 操作分发连线 ==========
+    entry -> which_op;
+
+    which_op -> add_start    [label=" 添加车辆", penwidth=1.8];
+    which_op -> update_start [label=" 更新车辆", penwidth=1.8];
+    which_op -> remove_start [label=" 删除车辆", penwidth=1.8];
+    which_op -> search_start [label=" 查找车辆", penwidth=1.8];
+    which_op -> save_start   [label=" 保存文件", penwidth=1.8];
+    which_op -> load_start   [label=" 加载文件", penwidth=1.8];
+    which_op -> stats_start  [label=" 统计信息", penwidth=1.8];
+
+    // ========== 图注 ==========
+    {
+        rank=sink;
+        legend_start  [label="开始/入口", shape="box", style="rounded,filled", fillcolor="#C8E6C9", fontsize=9, width=1.2];
+        legend_err    [label="失败返回", shape="box", style="filled", fillcolor="#FFCDD2", fontsize=9, width=1.2];
+        legend_ok     [label="成功返回", shape="box", style="filled", fillcolor="#C8E6C9", fontsize=9, width=1.2];
+        legend_decision [label="判断分支", shape="diamond", fontsize=9, width=1.2];
+
+        legend_start -> legend_err -> legend_ok -> legend_decision [style=invis];
+    }
+}

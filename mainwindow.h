@@ -38,6 +38,7 @@ private slots:
     void onAbout();
     void onVersion();
     void onSetFuelPrice();
+    void onSetMaxCapacity();
     void onHeaderClicked(int section);
     void onTableContextMenu(const QPoint &pos);
 
@@ -73,10 +74,11 @@ private:
     QTableWidget *m_table         = nullptr;
 
     // 状态栏标签
-    QLabel *m_statusTotal  = nullptr;
-    QLabel *m_statusBus    = nullptr;
-    QLabel *m_statusCar    = nullptr;
-    QLabel *m_statusTruck  = nullptr;
+    QLabel *m_statusTotal    = nullptr;
+    QLabel *m_statusBus      = nullptr;
+    QLabel *m_statusCar      = nullptr;
+    QLabel *m_statusTruck    = nullptr;
+    QLabel *m_statusCapacity = nullptr;
 
     // 当前显示在表格里的车辆指针列表（用于刷新/选中映射）
     QVector<Vehicle *> m_displayedVehicles;

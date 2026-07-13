@@ -1,0 +1,544 @@
+// VMS 主窗口层 — MainWindow 核心交互流程图
+// 渲染命令: dot -Tpng docs/mainwindow-flow.dot -o docs/mainwindow-flow.png
+
+digraph VMS_MainWindow {
+    // ========== 全局设置 ==========
+    rankdir=TB;
+    fontname="Noto Sans CJK SC";
+    bgcolor="#FFFFFF";
+
+    node [fontname="Noto Sans CJK SC", fontsize=10.5];
+    edge [fontname="Noto Sans CJK SC", fontsize=9.5, penwidth=1.8];
+
+    // ===================================================================
+    // 第一部分：MainWindow 初始化流程
+    // ===================================================================
+
+    init_start [label="MainWindow 构造\nMainWindow(parent)", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=2.0];
+
+    init_title [label="setWindowTitle(\"车辆管理系统\")\nresize(1100, 650)", shape="box"];
+
+    init_ui [label="setupUI()", shape="box"];
+
+    init_menu [label="setupMenuBar()\n├ 文件(&F): 打开/保存/另存为/退出\n├ 操作(&V): 添加/编辑/删除/油价/容量\n├ 统计(&T): 统计信息\n└ 帮助(&H): 关于/版本号", shape="box"];
+
+    init_toolbar [label="setupToolBar()\n├ 添加 | 编辑 | 删除 | 按编号删除 | 批量删除\n├ 打开 | 保存 | 另存为\n└ 统计", shape="box"];
+
+    init_central [label="setupCentralWidget()\n├ 搜索面板: QLineEdit + 4×QRadioButton\n│   (按编号/按车牌号/按制造公司/按类别)\n│   + 查询按钮 + 显示全部按钮\n└ 车辆表格: QTableWidget (12列)\n    · 整行选择 + 多选模式\n    · 交替行颜色 + 隐藏行号\n    · 表头排序 + 右键菜单\n    · 双击编辑 + Delete批量删除", shape="box"];
+
+    init_status [label="setupStatusBar()\n├ m_statusCapacity  (容量: x/100)\n├ m_statusTotal     (总计: x 辆)\n├ m_statusBus       (客车: x 辆)\n├ m_statusCar       (轿车: x 辆)\n└ m_statusTruck     (卡车: x 辆)", shape="box"];
+
+    init_update [label="updateStatusBar()\n从 m_manager.getStatistics()\n获取各类型计数并刷新标签", shape="box"];
+
+    init_done [label="初始化完成\n等待用户交互", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // --- 初始化连线 ---
+    init_start -> init_title;
+    init_title -> init_ui;
+    init_ui -> init_menu;
+    init_menu -> init_toolbar;
+    init_toolbar -> init_central;
+    init_central -> init_status;
+    init_status -> init_update;
+    init_update -> init_done;
+
+    // ===================================================================
+    // 第二部分：搜索流程
+    // ===================================================================
+
+    search_start [label="用户触发搜索\n(点击查询按钮 / 回车)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    search_keyword [label="keyword =\nm_searchEdit->text()\n.trimmed()", shape="box"];
+
+    search_empty [label="keyword\n.isEmpty() ?", shape="diamond"];
+
+    search_showall [label="refreshTable()\n显示全部车辆", shape="box"];
+
+    search_mode [label="读取 m_searchGroup\n->checkedId()\n确定搜索模式", shape="box"];
+
+    search_dispatch [label="搜索\n模式?", shape="diamond"];
+
+    // 模式 0: 按编号
+    search_id [label="findById(keyword)\n精确匹配", shape="box"];
+    search_id_found [label="结果\n!= nullptr?", shape="diamond"];
+    search_id_notfound [label="提示 \"该编号不存在！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // 模式 1: 按车牌号 (模糊)
+    search_plate [label="findByPlateNumberFuzzy(\nkeyword)\n大小写不敏感 模糊匹配", shape="box"];
+    search_plate_empty [label="结果\nisEmpty() ?", shape="diamond"];
+    search_plate_notfound [label="提示 \"未找到匹配的车牌号！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // 模式 2: 按制造公司 (模糊)
+    search_mfg [label="findByManufacturer(\nkeyword)\n大小写不敏感 模糊匹配", shape="box"];
+    search_mfg_empty [label="结果\nisEmpty() ?", shape="diamond"];
+    search_mfg_notfound [label="提示 \"该车辆制造公司不存在！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // 模式 3: 按类别
+    search_type [label="解析关键词:\n· 含\"客车\"/\"巴士\" → Bus\n· 含\"轿车\" → Car\n· 含\"卡车\"/\"货车\" → Truck", shape="box"];
+    search_type_valid [label="解析\n成功?", shape="diamond"];
+    search_type_invalid [label="提示 \"请输入正确类别：\n大客车/小轿车/卡车\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+    search_type_query [label="findByType(vt)", shape="box"];
+    search_type_empty [label="结果\nisEmpty() ?", shape="diamond"];
+    search_type_notfound [label="提示 \"该类别没有车辆！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    search_display [label="refreshTable(result)\n表格显示搜索结果", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // --- 搜索连线 ---
+    search_start -> search_keyword;
+    search_keyword -> search_empty;
+
+    search_empty -> search_showall [label=" 是\n(空关键字)", penwidth=1.8];
+    search_empty -> search_mode [label=" 否", penwidth=1.8];
+
+    search_mode -> search_dispatch;
+
+    search_dispatch -> search_id    [label=" 0: 按编号", penwidth=1.8];
+    search_dispatch -> search_plate [label=" 1: 按车牌号", penwidth=1.8];
+    search_dispatch -> search_mfg   [label=" 2: 按制造公司", penwidth=1.8];
+    search_dispatch -> search_type  [label=" 3: 按类别", penwidth=1.8];
+
+    // 编号分支
+    search_id -> search_id_found;
+    search_id_found -> search_id_notfound [label=" 否", penwidth=1.8];
+    search_id_found -> search_display [label=" 是", penwidth=1.8];
+
+    // 车牌分支
+    search_plate -> search_plate_empty;
+    search_plate_empty -> search_plate_notfound [label=" 是", penwidth=1.8];
+    search_plate_empty -> search_display [label=" 否", penwidth=1.8];
+
+    // 制造商分支
+    search_mfg -> search_mfg_empty;
+    search_mfg_empty -> search_mfg_notfound [label=" 是", penwidth=1.8];
+    search_mfg_empty -> search_display [label=" 否", penwidth=1.8];
+
+    // 类别分支
+    search_type -> search_type_valid;
+    search_type_valid -> search_type_invalid [label=" 否", penwidth=1.8];
+    search_type_valid -> search_type_query [label=" 是", penwidth=1.8];
+    search_type_query -> search_type_empty;
+    search_type_empty -> search_type_notfound [label=" 是", penwidth=1.8];
+    search_type_empty -> search_display [label=" 否", penwidth=1.8];
+
+    // ===================================================================
+    // 第三部分：添加车辆流程
+    // ===================================================================
+
+    add_trigger [label="用户点击添加\n(菜单/工具栏/右键)", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=2.0];
+
+    add_collect [label="收集已有编号列表\nexistingIds\n(用于自动生成默认编号)", shape="box"];
+
+    add_dialog [label="弹出 AddVehicleDialog\n传入 existingIds\n用户填写车辆信息", shape="box"];
+
+    add_accepted [label="dlg.exec()\n== Accepted ?\n(用户点确定)", shape="diamond"];
+
+    add_cancel [label="用户取消\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    add_create [label="dlg.createVehicle()\n创建 Vehicle 子类对象\n(Bus/Car/Truck)", shape="box"];
+
+    add_create_ok [label="v\n!= nullptr ?", shape="diamond"];
+
+    add_create_fail [label="return", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    add_mgr [label="m_manager.addVehicle(\nv, errorMsg)", shape="box"];
+
+    add_mgr_ok [label="添加\n成功?", shape="diamond"];
+
+    add_success [label="· m_unsavedChanges = true\n· refreshTable()\n· 提示 \"添加成功！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    add_fail [label="· delete v (释放内存)\n· 若容量满则附加容量提示\n· 提示 \"添加失败\" + errorMsg", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // --- 添加连线 ---
+    add_trigger -> add_collect;
+    add_collect -> add_dialog;
+    add_dialog -> add_accepted;
+
+    add_accepted -> add_cancel [label=" 否", penwidth=1.8];
+    add_accepted -> add_create [label=" 是", penwidth=1.8];
+
+    add_create -> add_create_ok;
+    add_create_ok -> add_create_fail [label=" 否", penwidth=1.8];
+    add_create_ok -> add_mgr [label=" 是", penwidth=1.8];
+
+    add_mgr -> add_mgr_ok;
+    add_mgr_ok -> add_success [label=" 成功", penwidth=1.8];
+    add_mgr_ok -> add_fail [label=" 失败", penwidth=1.8];
+
+    // ===================================================================
+    // 第四部分：编辑车辆流程
+    // ===================================================================
+
+    edit_trigger [label="用户点击编辑\n(菜单/工具栏/双击行)", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=2.0];
+
+    edit_select [label="currentSelectedRow()\n获取当前选中行", shape="box"];
+
+    edit_select_ok [label="row\n>= 0 ?", shape="diamond"];
+
+    edit_no_select [label="提示 \"请先在表格中\n选择一条记录！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    edit_find [label="m_manager.findById(id)\n查找当前车辆", shape="box"];
+
+    edit_found [label="v\n!= nullptr ?", shape="diamond"];
+
+    edit_not_found [label="return", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    edit_dialog [label="弹出 EditVehicleDialog(v)\n预填当前车辆数据\n用户修改后确定", shape="box"];
+
+    edit_accepted [label="dlg.exec()\n== Accepted ?", shape="diamond"];
+
+    edit_cancel [label="用户取消\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    edit_create [label="dlg.createVehicle()\n创建更新后的车辆对象", shape="box"];
+
+    edit_update [label="m_manager.updateVehicle(\nid, newData, errorMsg)", shape="box"];
+
+    edit_ok [label="更新\n成功?", shape="diamond"];
+
+    edit_success [label="· m_unsavedChanges = true\n· refreshTable()\n· 提示 \"修改成功！\"\n· delete newData (清理临时对象)", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    edit_fail [label="提示 \"修改失败\" + errorMsg\n· delete newData", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // --- 编辑连线 ---
+    edit_trigger -> edit_select;
+    edit_select -> edit_select_ok;
+
+    edit_select_ok -> edit_no_select [label=" 否\n(未选中)", penwidth=1.8];
+    edit_select_ok -> edit_find [label=" 是", penwidth=1.8];
+
+    edit_find -> edit_found;
+    edit_found -> edit_not_found [label=" 否", penwidth=1.8];
+    edit_found -> edit_dialog [label=" 是", penwidth=1.8];
+
+    edit_dialog -> edit_accepted;
+    edit_accepted -> edit_cancel [label=" 否", penwidth=1.8];
+    edit_accepted -> edit_create [label=" 是", penwidth=1.8];
+
+    edit_create -> edit_update;
+    edit_update -> edit_ok;
+    edit_ok -> edit_success [label=" 成功", penwidth=1.8];
+    edit_ok -> edit_fail [label=" 失败", penwidth=1.8];
+
+    // ===================================================================
+    // 第五部分：删除车辆流程 (合并三种删除方式)
+    // ===================================================================
+
+    del_trigger [label="用户触发删除", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=2.0];
+
+    del_mode [label="删除\n方式?", shape="diamond"];
+
+    // --- 方式A: 选中行删除 ---
+    del_row [label="onDeleteVehicle()\n(选中行删除)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=1.5];
+
+    del_row_empty [label="m_manager\n.isEmpty() ?", shape="diamond"];
+    del_row_err_empty [label="提示 \"信息库为空！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_row_select [label="currentSelectedRow()\n获取选中行", shape="box"];
+    del_row_sel_ok [label="row\n>= 0 ?", shape="diamond"];
+    del_row_err_sel [label="提示 \"请选择一条记录！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_row_confirm [label="确认对话框\n\"确定删除编号为XX的车辆吗?\"\nYes / No", shape="box"];
+    del_row_confirmed [label="用户\n选 Yes ?", shape="diamond"];
+    del_row_cancel [label="return", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_row_exec [label="m_manager.removeVehicle(id)", shape="box"];
+    del_row_ok [label="删除\n成功?", shape="diamond"];
+    del_row_success [label="· m_unsavedChanges = true\n· refreshTable()\n· 提示 \"已删除！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+    del_row_fail [label="提示 \"该编号不存在！\"", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // --- 方式B: 按编号删除 ---
+    del_id [label="onDeleteById()\n(按编号删除)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=1.5];
+
+    del_id_empty [label="m_manager\n.isEmpty() ?", shape="diamond"];
+    del_id_err_empty [label="提示 \"信息库为空！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_id_input [label="QInputDialog::getText()\n用户输入编号", shape="box"];
+    del_id_ok [label="用户确定\n且输入非空?", shape="diamond"];
+    del_id_cancel [label="return", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_id_find [label="m_manager.findById(id)", shape="box"];
+    del_id_exist [label="车辆\n存在?", shape="diamond"];
+    del_id_notexist [label="提示 \"编号XX不存在！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_id_confirm [label="确认对话框\n显示车辆详细信息\n(车牌/类别/制造商)\nYes / No", shape="box"];
+    del_id_confirmed [label="用户\n选 Yes ?", shape="diamond"];
+    del_id_cancel2 [label="return", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_id_exec [label="m_manager.removeVehicle(id)", shape="box"];
+    del_id_success [label="· m_unsavedChanges = true\n· refreshTable()\n· 提示 \"已删除！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+    del_id_fail [label="提示 \"删除失败！\"", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // --- 方式C: 批量删除 ---
+    del_batch [label="onBatchDelete()\n(批量删除 / Delete键)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=1.5];
+
+    del_batch_select [label="selectedRows =\nm_table->selectionModel()\n->selectedRows()", shape="box"];
+    del_batch_sel_ok [label="选中行\n> 0 ?", shape="diamond"];
+    del_batch_err_sel [label="提示 \"请勾选要删除的记录！\n可按住Ctrl或Shift多选\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_batch_collect [label="遍历选中行\n收集所有 ID → ids 列表", shape="box"];
+    del_batch_confirm [label="确认对话框\n列出前10条ID\n(超出显示\"...及其他N条\")\n\"此操作不可撤销！\"", shape="box"];
+    del_batch_confirmed [label="用户\n选 Yes ?", shape="diamond"];
+    del_batch_cancel [label="return", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    del_batch_loop [label="遍历 ids:\n对每个 id 调用\nm_manager.removeVehicle(id)\n累计 deleted 计数", shape="box"];
+    del_batch_done [label="· m_unsavedChanges = true\n· refreshTable()\n· 提示 \"成功删除N条记录！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // --- 删除分发连线 ---
+    del_trigger -> del_mode;
+    del_mode -> del_row   [label=" 选中行删除", penwidth=1.8];
+    del_mode -> del_id    [label=" 按编号删除", penwidth=1.8];
+    del_mode -> del_batch [label=" 批量删除", penwidth=1.8];
+
+    // 方式A连线
+    del_row -> del_row_empty;
+    del_row_empty -> del_row_err_empty [label=" 是", penwidth=1.5];
+    del_row_empty -> del_row_select [label=" 否", penwidth=1.5];
+    del_row_select -> del_row_sel_ok;
+    del_row_sel_ok -> del_row_err_sel [label=" 否", penwidth=1.5];
+    del_row_sel_ok -> del_row_confirm [label=" 是", penwidth=1.5];
+    del_row_confirm -> del_row_confirmed;
+    del_row_confirmed -> del_row_cancel [label=" 否", penwidth=1.5];
+    del_row_confirmed -> del_row_exec [label=" 是", penwidth=1.5];
+    del_row_exec -> del_row_ok;
+    del_row_ok -> del_row_success [label=" 成功", penwidth=1.5];
+    del_row_ok -> del_row_fail [label=" 失败", penwidth=1.5];
+
+    // 方式B连线
+    del_id -> del_id_empty;
+    del_id_empty -> del_id_err_empty [label=" 是", penwidth=1.5];
+    del_id_empty -> del_id_input [label=" 否", penwidth=1.5];
+    del_id_input -> del_id_ok;
+    del_id_ok -> del_id_cancel [label=" 否", penwidth=1.5];
+    del_id_ok -> del_id_find [label=" 是", penwidth=1.5];
+    del_id_find -> del_id_exist;
+    del_id_exist -> del_id_notexist [label=" 否", penwidth=1.5];
+    del_id_exist -> del_id_confirm [label=" 是", penwidth=1.5];
+    del_id_confirm -> del_id_confirmed;
+    del_id_confirmed -> del_id_cancel2 [label=" 否", penwidth=1.5];
+    del_id_confirmed -> del_id_exec [label=" 是", penwidth=1.5];
+    del_id_exec -> del_id_success [label=" 成功", penwidth=1.3];
+    del_id_exec -> del_id_fail [label=" 失败", penwidth=1.5];
+
+    // 方式C连线
+    del_batch -> del_batch_select;
+    del_batch_select -> del_batch_sel_ok;
+    del_batch_sel_ok -> del_batch_err_sel [label=" 否", penwidth=1.5];
+    del_batch_sel_ok -> del_batch_collect [label=" 是", penwidth=1.5];
+    del_batch_collect -> del_batch_confirm;
+    del_batch_confirm -> del_batch_confirmed;
+    del_batch_confirmed -> del_batch_cancel [label=" 否", penwidth=1.5];
+    del_batch_confirmed -> del_batch_loop [label=" 是", penwidth=1.5];
+    del_batch_loop -> del_batch_done;
+
+    // ===================================================================
+    // 第六部分：文件操作流程 (保存/另存为/打开)
+    // ===================================================================
+
+    file_trigger [label="用户触发文件操作", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    file_op [label="操作\n类型?", shape="diamond"];
+
+    // --- 保存 ---
+    file_save [label="onSave()", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=1.5];
+
+    file_save_empty [label="m_manager\n.isEmpty() ?", shape="diamond"];
+    file_save_err [label="提示 \"信息库为空，\n无需保存！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    file_save_path [label="m_currentFilePath\n.isEmpty() ?", shape="diamond"];
+
+    file_save_direct [label="m_manager.saveToFile(\nm_currentFilePath, errorMsg)", shape="box"];
+    file_save_ok [label="保存\n成功?", shape="diamond"];
+    file_save_done [label="· m_unsavedChanges = false\n· 更新窗口标题\n· 提示 \"已保存！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+    file_save_fail [label="提示 errorMsg", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // --- 另存为 ---
+    file_saveas [label="onSaveToFile()", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=1.5];
+
+    file_saveas_empty [label="m_manager\n.isEmpty() ?", shape="diamond"];
+    file_saveas_err [label="提示 \"信息库为空，\n无需保存！\"\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    file_saveas_dlg [label="QFileDialog::getSaveFileName()\n弹出保存对话框\n默认文件名: vehicles.json", shape="box"];
+    file_saveas_cancel [label="用户取消\nreturn", shape="box", style="filled", fillcolor="#FFCDD2")];
+    file_saveas_path [label="用户\n选择了路径?", shape="diamond"];
+
+    file_saveas_exec [label="m_manager.saveToFile(\nfilePath, errorMsg)", shape="box"];
+    file_saveas_ok [label="保存\n成功?", shape="diamond"];
+    file_saveas_done [label="· m_unsavedChanges = false\n· m_currentFilePath = filePath\n· 更新窗口标题\n· 提示 \"已保存！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+    file_saveas_fail [label="提示 errorMsg", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // --- 打开 ---
+    file_load [label="onLoadFromFile()", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=1.5];
+
+    file_load_dlg [label="QFileDialog::getOpenFileName()\n弹出打开对话框\n筛选: JSON 文件 (*.json)", shape="box"];
+    file_load_cancel [label="用户取消\nreturn", shape="box", style="filled", fillcolor="#FFCDD2")];
+    file_load_path [label="用户\n选择了文件?", shape="diamond"];
+
+    file_load_exec [label="m_manager.loadFromFile(\nfilePath, errorMsg)", shape="box"];
+    file_load_ok [label="加载\n成功?", shape="diamond"];
+    file_load_done [label="· m_unsavedChanges = false\n· m_currentFilePath = filePath\n· 更新窗口标题\n· refreshTable()\n· 提示 \"已加载N条记录！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+    file_load_fail [label="提示 errorMsg", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // --- 文件操作连线 ---
+    file_trigger -> file_op;
+    file_op -> file_save   [label=" 保存", penwidth=1.8];
+    file_op -> file_saveas [label=" 另存为", penwidth=1.8];
+    file_op -> file_load   [label=" 打开", penwidth=1.8];
+
+    // 保存连线
+    file_save -> file_save_empty;
+    file_save_empty -> file_save_err [label=" 是", penwidth=1.5];
+    file_save_empty -> file_save_path [label=" 否", penwidth=1.5];
+    file_save_path -> file_saveas [label=" 是\n(走另存为)", penwidth=1.5, style=dashed, color="#888888"];
+    file_save_path -> file_save_direct [label=" 否\n(直接保存)", penwidth=1.5];
+    file_save_direct -> file_save_ok;
+    file_save_ok -> file_save_done [label=" 成功", penwidth=1.5];
+    file_save_ok -> file_save_fail [label=" 失败", penwidth=1.5];
+
+    // 另存为连线
+    file_saveas -> file_saveas_empty;
+    file_saveas_empty -> file_saveas_err [label=" 是", penwidth=1.5];
+    file_saveas_empty -> file_saveas_dlg [label=" 否", penwidth=1.5];
+    file_saveas_dlg -> file_saveas_path;
+    file_saveas_path -> file_saveas_cancel [label=" 否", penwidth=1.5];
+    file_saveas_path -> file_saveas_exec [label=" 是", penwidth=1.5];
+    file_saveas_exec -> file_saveas_ok;
+    file_saveas_ok -> file_saveas_done [label=" 成功", penwidth=1.5];
+    file_saveas_ok -> file_saveas_fail [label=" 失败", penwidth=1.5];
+
+    // 打开连线
+    file_load -> file_load_dlg;
+    file_load_dlg -> file_load_path;
+    file_load_path -> file_load_cancel [label=" 否", penwidth=1.5];
+    file_load_path -> file_load_exec [label=" 是", penwidth=1.5];
+    file_load_exec -> file_load_ok;
+    file_load_ok -> file_load_done [label=" 成功", penwidth=1.5];
+    file_load_ok -> file_load_fail [label=" 失败", penwidth=1.5];
+
+    // ===================================================================
+    // 第七部分：设置操作 (油价/容量)
+    // ===================================================================
+
+    settings_trigger [label="用户触发设置", shape="box", style="rounded,filled", fillcolor="#FFF3E0", penwidth=2.0];
+
+    settings_op [label="设置\n类型?", shape="diamond"];
+
+    // 油价
+    settings_fuel [label="onSetFuelPrice()\nQInputDialog::getDouble()\n当前值 → m_manager.fuelPrice()\n范围: 0.01 ~ 999.99\n精度: 2位小数", shape="box"];
+    settings_fuel_ok [label="用户\n点确定?", shape="diamond"];
+    settings_fuel_done [label="· m_manager.setFuelPrice(newPrice)\n· m_unsavedChanges = true\n· refreshTable() (费用依赖油价)\n· 提示 \"油价已更新！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+    settings_fuel_cancel [label="用户取消\nreturn", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    // 容量
+    settings_cap [label="onSetMaxCapacity()\nQInputDialog::getInt()\n当前值 → m_manager.maxCapacity()\n最小值 → m_manager.count()\n最大值 → 9999", shape="box"];
+    settings_cap_ok [label="用户\n点确定?", shape="diamond"];
+    settings_cap_done [label="· m_manager.setMaxCapacity(newCap)\n· m_unsavedChanges = true\n· updateStatusBar()\n· 提示 \"容量已更新！\"", shape="box", style="filled", fillcolor="#C8E6C9"];
+    settings_cap_cancel [label="用户取消\nreturn", shape="box", style="filled", fillcolor="#FFCDD2")];
+
+    // --- 设置连线 ---
+    settings_trigger -> settings_op;
+    settings_op -> settings_fuel [label=" 修改油价", penwidth=1.8];
+    settings_op -> settings_cap  [label=" 设置容量上限", penwidth=1.8];
+
+    settings_fuel -> settings_fuel_ok;
+    settings_fuel_ok -> settings_fuel_done [label=" 是", penwidth=1.5];
+    settings_fuel_ok -> settings_fuel_cancel [label=" 否", penwidth=1.5];
+
+    settings_cap -> settings_cap_ok;
+    settings_cap_ok -> settings_cap_done [label=" 是", penwidth=1.5];
+    settings_cap_ok -> settings_cap_cancel [label=" 否", penwidth=1.5];
+
+    // ===================================================================
+    // 第八部分：表格排序
+    // ===================================================================
+
+    sort_trigger [label="用户点击表头\nonHeaderClicked(section)", shape="box", style="rounded,filled", fillcolor="#F3E5F5", penwidth=2.0];
+
+    sort_empty [label="m_displayedVehicles\n.isEmpty() ?", shape="diamond"];
+    sort_return [label="return", shape="box", style="filled", fillcolor="#FFCDD2")];
+
+    sort_toggle [label="同一列再次点击?\nsection == m_sortColumn", shape="diamond"];
+    sort_toggle_order [label="切换排序方向:\nm_sortOrder = 升序↔降序", shape="box"];
+    sort_default [label="设置新排序列:\nm_sortColumn = section\nm_sortOrder = 升序", shape="box"];
+
+    sort_update [label="m_table->horizontalHeader()\n->setSortIndicator(col, order)\n更新表头箭头", shape="box"];
+
+    sort_dispatch [label="根据列号\n选择排序字段", shape="box"];
+    sort_exec [label="std::sort() + lambda\n按对应字段排序\n(列0-11 → id/plate/mfg/date/...\n→ km/fuel/maintenance/road/\n→ acc/monthly/special)", shape="box"];
+    sort_refresh [label="refreshTable(sorted)\n用排序后的列表刷新表格", shape="box", style="filled", fillcolor="#C8E6C9")];
+
+    // --- 排序连线 ---
+    sort_trigger -> sort_empty;
+    sort_empty -> sort_return [label=" 是", penwidth=1.5];
+    sort_empty -> sort_toggle [label=" 否", penwidth=1.5];
+
+    sort_toggle -> sort_toggle_order [label=" 是", penwidth=1.5];
+    sort_toggle -> sort_default [label=" 否 (新列)", penwidth=1.5];
+
+    sort_toggle_order -> sort_update;
+    sort_default -> sort_update;
+
+    sort_update -> sort_dispatch;
+    sort_dispatch -> sort_exec;
+    sort_exec -> sort_refresh;
+
+    // ===================================================================
+    // 第九部分：右键上下文菜单
+    // ===================================================================
+
+    context_trigger [label="用户在表格上右键\nonTableContextMenu(pos)", shape="box", style="rounded,filled", fillcolor="#F3E5F5", penwidth=2.0];
+
+    context_menu [label="创建 QMenu\n· 添加车辆 (始终可用)\n· -----分隔线-----", shape="box"];
+
+    context_row [label="根据 pos.y() 获取行号\nrow = m_table->rowAt(pos.y())", shape="box"];
+
+    context_valid [label="row >= 0 &&\nrow < displayed\n.size() ?", shape="diamond"];
+
+    context_add_more [label="追加菜单项:\n· 编辑\n· 删除\n· -----分隔线-----\n· 复制编号\n· 复制车牌号\n\n若点击行不在选中范围\n→ m_table->selectRow(row)", shape="box"];
+
+    context_exec [label="menu.exec(pos)\n显示菜单并等待选择", shape="box"];
+
+    context_chosen [label="用户\n选择了?", shape="diamond"];
+
+    context_dispatch [label="根据 chosen 分发", shape="box"];
+
+    context_add [label="→ onAddVehicle()", shape="box"];
+    context_edit [label="→ onEditVehicle()", shape="box"];
+    context_del [label="→ onDeleteVehicle()", shape="box"];
+    context_copyid [label="→ clipboard->setText(id)\n复制编号到剪贴板", shape="box"];
+    context_copyplate [label="→ findById(id)\n→ clipboard->setText(\n   plateNumber)\n复制车牌到剪贴板", shape="box"];
+    context_none [label="未选择\nreturn", shape="box", style="filled", fillcolor="#FFCDD2")];
+
+    // --- 右键菜单连线 ---
+    context_trigger -> context_menu;
+    context_menu -> context_row;
+    context_row -> context_valid;
+
+    context_valid -> context_add_more [label=" 是\n(点击在有效行上)", penwidth=1.5];
+    context_valid -> context_exec [label=" 否\n(点击在空白区域)", penwidth=1.5];
+
+    context_add_more -> context_exec;
+
+    context_exec -> context_chosen;
+
+    context_chosen -> context_dispatch [label=" 是", penwidth=1.5];
+    context_chosen -> context_none [label=" 否", penwidth=1.5];
+
+    context_dispatch -> context_add;
+    context_dispatch -> context_edit;
+    context_dispatch -> context_del;
+    context_dispatch -> context_copyid;
+    context_dispatch -> context_copyplate;
+
+    // ===================================================================
+    // 图注
+    // ===================================================================
+    {
+        rank=sink;
+        legend_start  [label="开始/入口", shape="box", style="rounded,filled", fillcolor="#C8E6C9", fontsize=9, width=1.1];
+        legend_err    [label="失败/取消", shape="box", style="filled", fillcolor="#FFCDD2", fontsize=9, width=1.1];
+        legend_ok     [label="成功", shape="box", style="filled", fillcolor="#C8E6C9", fontsize=9, width=1.1];
+        legend_decision [label="判断分支", shape="diamond", fontsize=9, width=1.1];
+        legend_sub    [label="子流程入口", shape="box", style="rounded,filled", fillcolor="#E8EAF6", fontsize=9, width=1.1];
+
+        legend_start -> legend_err -> legend_ok -> legend_decision -> legend_sub [style=invis];
+    }
+}

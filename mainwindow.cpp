@@ -105,6 +105,7 @@ void MainWindow::setupMenuBar() {
     vehicleMenu->addAction(QStringLiteral("批量删除(&B)..."), QKeySequence::Delete,
                             this, &MainWindow::onBatchDelete);
     vehicleMenu->addAction(QStringLiteral("更新油价(&F)..."), this, &MainWindow::onSetFuelPrice);
+    vehicleMenu->addAction(QStringLiteral("设置容量上限(&C)..."), this, &MainWindow::onSetMaxCapacity);
     vehicleMenu->addSeparator();
     vehicleMenu->addAction(QStringLiteral("显示全部(&R)"), this, &MainWindow::onShowAll);
 
@@ -170,12 +171,12 @@ void MainWindow::setupCentralWidget() {
     searchLayout->addWidget(m_radioByMfg);
     searchLayout->addWidget(m_radioByType);
 
-    m_searchBtn = new QPushButton(QStringLiteral("🔍 查询"));
+    m_searchBtn = new QPushButton(QStringLiteral("查询"));
     m_searchBtn->setDefault(true);
     connect(m_searchBtn, &QPushButton::clicked, this, &MainWindow::onSearch);
     searchLayout->addWidget(m_searchBtn);
 
-    m_showAllBtn = new QPushButton(QStringLiteral("📋 显示全部"));
+    m_showAllBtn = new QPushButton(QStringLiteral("显示全部"));
     connect(m_showAllBtn, &QPushButton::clicked, this, &MainWindow::onShowAll);
     searchLayout->addWidget(m_showAllBtn);
 
@@ -240,8 +241,10 @@ void MainWindow::setupStatusBar() {
     m_statusTotal = new QLabel();
     m_statusBus   = new QLabel();
     m_statusCar   = new QLabel();
-    m_statusTruck = new QLabel();
+    m_statusTruck    = new QLabel();
+    m_statusCapacity = new QLabel();
 
+    statusBar()->addPermanentWidget(m_statusCapacity);
     statusBar()->addPermanentWidget(m_statusTotal);
     statusBar()->addPermanentWidget(m_statusBus);
     statusBar()->addPermanentWidget(m_statusCar);
@@ -252,7 +255,8 @@ void MainWindow::setupStatusBar() {
 
 void MainWindow::updateStatusBar() {
     Statistics s = m_manager.getStatistics();
-    m_statusTotal->setText(QStringLiteral("  总计: %1 辆  ").arg(s.total));
+    m_statusCapacity->setText(QStringLiteral("  容量: %1/%2  ").arg(s.total).arg(m_manager.maxCapacity()));
+    m_statusTotal->setText(QStringLiteral("总计: %1 辆  ").arg(s.total));
     m_statusBus->setText(QStringLiteral("客车: %1 辆  ").arg(s.busCount));
     m_statusCar->setText(QStringLiteral("轿车: %1 辆  ").arg(s.carCount));
     m_statusTruck->setText(QStringLiteral("卡车: %1 辆  ").arg(s.truckCount));
@@ -337,6 +341,10 @@ void MainWindow::onAddVehicle() {
                                  QStringLiteral("车辆 %1 添加成功！").arg(v->id()));
     } else {
         delete v;
+        // 如果是容量满导致的失败，给出更详细的提示
+        if (m_manager.isFull()) {
+            errorMsg += QStringLiteral("\n\n提示：可在【操作 → 设置容量上限】中增大容量（当前上限: %1）。").arg(m_manager.maxCapacity());
+        }
         QMessageBox::warning(this, QStringLiteral("添加失败"), errorMsg);
     }
 }
@@ -702,6 +710,28 @@ void MainWindow::onSetFuelPrice() {
         refreshTable();  // 刷新表格（因为当月总费用依赖油价）
         QMessageBox::information(this, QStringLiteral("成功"),
                                  QStringLiteral("油价已更新为 %1 元/升！").arg(newPrice));
+    }
+}
+
+void MainWindow::onSetMaxCapacity() {
+    bool ok = false;
+    int newCap = QInputDialog::getInt(
+        this,
+        QStringLiteral("设置容量上限"),
+        QStringLiteral("请输入车辆信息库最大容量："),
+        m_manager.maxCapacity(),         // 默认值：当前容量
+        m_manager.count(),               // 最小值：不低于当前车辆数
+        9999,                             // 最大值
+        1,                                // 步进
+        &ok
+    );
+
+    if (ok) {
+        m_manager.setMaxCapacity(newCap);
+        m_unsavedChanges = true;
+        updateStatusBar();
+        QMessageBox::information(this, QStringLiteral("成功"),
+                                 QStringLiteral("容量上限已更新为 %1！").arg(newCap));
     }
 }
 

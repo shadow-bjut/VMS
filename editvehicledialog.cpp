@@ -131,7 +131,12 @@ void EditVehicleDialog::setupUI(const Vehicle *v) {
         }
 
         QString plate = m_plateEdit->text().trimmed();
-        if (!plate.isEmpty() && (plate.length() < 7 || plate.length() > 8)) {
+        if (plate.isEmpty()) {
+            QMessageBox::warning(this, QStringLiteral("输入错误"),
+                                 QStringLiteral("车牌号不能为空！"));
+            return;
+        }
+        if (plate.length() < 7 || plate.length() > 8) {
             QMessageBox::warning(this, QStringLiteral("输入错误"),
                                  QStringLiteral("车牌号必须为7到8个字符！"));
             return;

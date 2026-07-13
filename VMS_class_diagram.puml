@@ -1,0 +1,320 @@
+@startuml 车辆管理系统类图
+
+' ============================================================
+' 车辆管理系统 (VMS) — UML 类图
+' ============================================================
+
+skinparam classAttributeIconSize 0
+skinparam monochrome false
+skinparam backgroundColor #FEFEFE
+skinparam classBorderColor #333333
+skinparam classFontSize 12
+skinparam packageFontSize 14
+
+' ============================================================
+' 枚举
+' ============================================================
+
+enum VehicleType {
+  Bus
+  Car
+  Truck
+}
+
+' ============================================================
+' 数据结构
+' ============================================================
+
+class Statistics <<struct>> {
+  + total : int
+  + busCount : int
+  + carCount : int
+  + truckCount : int
+}
+
+' ============================================================
+' 核心层 — 车辆继承体系
+' ============================================================
+
+abstract class Vehicle {
+  ' === 公共属性 ===
+  # m_id : QString
+  # m_plateNumber : QString
+  # m_manufacturer : QString
+  # m_purchaseDate : QDate
+  # m_vehicleType : VehicleType
+  # m_totalKm : double
+  # m_fuelConsumption : double
+  # m_basicMaintenance : double
+  # m_roadFee : double
+  # m_accumulatedCost : double
+  --
+  ' === 构造 / 析构 ===
+  + Vehicle()
+  + Vehicle(VehicleType type, double defaultMaintenance)
+  + ~Vehicle()
+  ' === getter / setter ===
+  + id() : QString
+  + setId(QString) : void
+  + plateNumber() : QString
+  + setPlateNumber(QString) : void
+  + manufacturer() : QString
+  + setManufacturer(QString) : void
+  + purchaseDate() : QDate
+  + setPurchaseDate(QDate) : void
+  + vehicleType() : VehicleType
+  + totalKm() : double
+  + setTotalKm(double) : void
+  + fuelConsumption() : double
+  + setFuelConsumption(double) : void
+  + basicMaintenance() : double
+  + setBasicMaintenance(double) : void
+  + roadFee() : double
+  + setRoadFee(double) : void
+  + accumulatedCost() : double
+  + setAccumulatedCost(double) : void
+  ' === 抽象方法 ===
+  + {abstract} monthlyTotalCost(double fuelPrice) : double
+  + {abstract} typeName() : QString
+  ' === 序列化 ===
+  + toJson() : QJsonObject
+  + fromJson(QJsonObject) : void
+}
+
+class Bus {
+  - m_maxPassengers : int
+  --
+  + Bus()
+  + maxPassengers() : int
+  + setMaxPassengers(int) : void
+  + typeName() : QString
+  + monthlyTotalCost(double fuelPrice) : double
+  + toJson() : QJsonObject
+  + fromJson(QJsonObject) : void
+}
+
+class Car {
+  - m_trunkType : int
+  --
+  + Car()
+  + trunkType() : int
+  + setTrunkType(int) : void
+  + trunkTypeName() : QString
+  + typeName() : QString
+  + monthlyTotalCost(double fuelPrice) : double
+  + toJson() : QJsonObject
+  + fromJson(QJsonObject) : void
+}
+
+class Truck {
+  - m_maxLoad : double
+  --
+  + Truck()
+  + maxLoad() : double
+  + setMaxLoad(double) : void
+  + typeName() : QString
+  + monthlyTotalCost(double fuelPrice) : double
+  + toJson() : QJsonObject
+  + fromJson(QJsonObject) : void
+}
+
+Vehicle <|-- Bus
+Vehicle <|-- Car
+Vehicle <|-- Truck
+
+' ============================================================
+' 业务逻辑层 — VehicleManager
+' ============================================================
+
+class VehicleManager {
+  - m_vehicles : QVector<Vehicle *>
+  - m_maxCapacity : int = 100
+  - m_fuelPrice : double = 7.5
+  --
+  + VehicleManager()
+  + ~VehicleManager()
+  ' === 增删改查 ===
+  + addVehicle(Vehicle *, QString &errorMsg) : bool
+  + removeVehicle(QString id) : bool
+  + findById(QString) : Vehicle *
+  + findByPlateNumber(QString) : Vehicle *
+  + findByPlateNumberFuzzy(QString) : QVector<Vehicle *>
+  + findByManufacturer(QString) : QVector<Vehicle *>
+  + findByType(VehicleType) : QVector<Vehicle *>
+  + updateVehicle(QString oldId, Vehicle *, QString &errorMsg) : bool
+  + allVehicles() : const QVector<Vehicle *>&
+  ' === 统计 ===
+  + getStatistics() : Statistics
+  ' === 容量 ===
+  + count() : int
+  + isEmpty() : bool
+  + maxCapacity() : int
+  + setMaxCapacity(int) : void
+  + isFull() : bool
+  ' === 油价 ===
+  + fuelPrice() : double
+  + setFuelPrice(double) : void
+  ' === 文件 I/O ===
+  + saveToFile(QString, QString &errorMsg) : bool
+  + loadFromFile(QString, QString &errorMsg) : bool
+  + clearAll() : void
+}
+
+VehicleManager *-- Vehicle : manages
+VehicleManager ..> Statistics : creates
+
+' ============================================================
+' UI 层 — 对话框
+' ============================================================
+
+class AddVehicleDialog {
+  - m_idEdit : QLineEdit *
+  - m_plateEdit : QLineEdit *
+  - m_mfgEdit : QLineEdit *
+  - m_purchaseEdit : QDateEdit *
+  - m_totalKmSpin : QDoubleSpinBox *
+  - m_fuelConsumptionSpin : QDoubleSpinBox *
+  - m_roadFeeSpin : QDoubleSpinBox *
+  - m_accumulatedCostSpin : QDoubleSpinBox *
+  - m_maintenanceSpin : QDoubleSpinBox *
+  - m_typeCombo : QComboBox *
+  - m_stacked : QStackedWidget *
+  - m_passengerSpin : QSpinBox *
+  - m_trunkCombo : QComboBox *
+  - m_loadSpin : QDoubleSpinBox *
+  - m_buttonBox : QDialogButtonBox *
+  - m_existingIds : QSet<QString>
+  - m_lastAutoId : QString
+  --
+  + AddVehicleDialog(QStringList existingIds, QWidget *parent)
+  + createVehicle() : Vehicle *
+  - onTypeChanged(int) : void
+  - setupUI() : void
+  - generateDefaultId(int) : QString
+}
+
+class EditVehicleDialog {
+  - m_idEdit : QLineEdit *
+  - m_plateEdit : QLineEdit *
+  - m_mfgEdit : QLineEdit *
+  - m_purchaseEdit : QDateEdit *
+  - m_totalKmSpin : QDoubleSpinBox *
+  - m_fuelConsumptionSpin : QDoubleSpinBox *
+  - m_roadFeeSpin : QDoubleSpinBox *
+  - m_accumulatedCostSpin : QDoubleSpinBox *
+  - m_maintenanceSpin : QDoubleSpinBox *
+  - m_typeCombo : QComboBox *
+  - m_stacked : QStackedWidget *
+  - m_passengerSpin : QSpinBox *
+  - m_trunkCombo : QComboBox *
+  - m_loadSpin : QDoubleSpinBox *
+  - m_buttonBox : QDialogButtonBox *
+  --
+  + EditVehicleDialog(const Vehicle *, QWidget *parent)
+  + createVehicle() : Vehicle *
+  - onTypeChanged(int) : void
+  - setupUI(const Vehicle *) : void
+  - populateFields(const Vehicle *) : void
+}
+
+class StatisticsDialog {
+  --
+  + StatisticsDialog(const VehicleManager &, QWidget *parent)
+  - setupUI(const Statistics &, double avgBusCost, double avgCarCost, double avgTruckCost) : void
+}
+
+AddVehicleDialog ..> Vehicle : creates
+EditVehicleDialog ..> Vehicle : creates
+
+' ============================================================
+' UI 层 — MainWindow
+' ============================================================
+
+class MainWindow {
+  - m_manager : VehicleManager
+  - m_searchEdit : QLineEdit *
+  - m_radioById : QRadioButton *
+  - m_radioByPlate : QRadioButton *
+  - m_radioByMfg : QRadioButton *
+  - m_radioByType : QRadioButton *
+  - m_searchGroup : QButtonGroup *
+  - m_searchBtn : QPushButton *
+  - m_showAllBtn : QPushButton *
+  - m_table : QTableWidget *
+  - m_statusTotal : QLabel *
+  - m_statusBus : QLabel *
+  - m_statusCar : QLabel *
+  - m_statusTruck : QLabel *
+  - m_statusCapacity : QLabel *
+  - m_displayedVehicles : QVector<Vehicle *>
+  - m_sortColumn : int
+  - m_sortOrder : Qt::SortOrder
+  - m_currentFilePath : QString
+  - m_unsavedChanges : bool
+  --
+  + MainWindow(QWidget *parent)
+  + ~MainWindow()
+  ' === 事件 ===
+  # closeEvent(QCloseEvent *) : void
+  ' === UI 搭建 ===
+  - setupUI() : void
+  - setupMenuBar() : void
+  - setupToolBar() : void
+  - setupCentralWidget() : void
+  - setupStatusBar() : void
+  ' === 表格 ===
+  - refreshTable(const QVector<Vehicle *>&) : void
+  - refreshTable() : void
+  - updateStatusBar() : void
+  - currentSelectedRow() : int
+  - vehicleIdAtTableRow(int) : QString
+  ' === 槽函数 ===
+  - onAddVehicle() : void
+  - onEditVehicle() : void
+  - onDeleteVehicle() : void
+  - onDeleteById() : void
+  - onBatchDelete() : void
+  - onSearch() : void
+  - onShowAll() : void
+  - onSave() : void
+  - onSaveToFile() : void
+  - onLoadFromFile() : void
+  - onStatistics() : void
+  - onAbout() : void
+  - onVersion() : void
+  - onSetFuelPrice() : void
+  - onSetMaxCapacity() : void
+  - onHeaderClicked(int) : void
+  - onTableContextMenu(const QPoint &) : void
+}
+
+MainWindow *-- VehicleManager : "m_manager"
+MainWindow ..> AddVehicleDialog : opens
+MainWindow ..> EditVehicleDialog : opens
+MainWindow ..> StatisticsDialog : opens
+MainWindow --|> QMainWindow
+
+AddVehicleDialog --|> QDialog
+EditVehicleDialog --|> QDialog
+StatisticsDialog --|> QDialog
+
+note bottom of Vehicle
+  大客车维护费默认 2000 元/月
+  小轿车维护费默认 1000 元/月
+  卡车维护费默认 1500 元/月
+  当月总费用 = 油价 × 耗油量/公里 + 基本维护费
+end note
+
+note right of VehicleManager
+  负责车辆的增删改查
+  容量控制与油价管理
+  JSON 文件持久化
+end note
+
+note bottom of MainWindow
+  主窗口：表格 + 搜索 + 工具栏 + 菜单栏 + 状态栏
+  支持按编号/车牌/制造商/类别搜索
+  支持表头点击排序、右键菜单、批量删除
+end note
+
+@enduml

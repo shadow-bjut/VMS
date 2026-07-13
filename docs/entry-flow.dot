@@ -1,0 +1,119 @@
+// VMS 程序入口模块 — 启动与退出流程图
+// 渲染命令: dot -Tpng docs/entry-flow.dot -o docs/entry-flow.png
+
+digraph VMS_EntryFlow {
+    // ========== 全局设置 ==========
+    rankdir=TB;
+    fontname="Noto Sans CJK SC";
+    bgcolor="#FFFFFF";
+    compound=true;
+
+    // 默认节点样式
+    node [fontname="Noto Sans CJK SC", fontsize=11];
+    // 默认连线样式
+    edge [fontname="Noto Sans CJK SC", fontsize=10, penwidth=1.8];
+
+    // ========== 节点定义 ==========
+
+    // --- 开始/结束节点 (圆角矩形) ---
+    start [label="程序启动\nmain()", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=2.0];
+    end   [label="程序退出\nreturn 0", shape="box", style="rounded,filled", fillcolor="#FFCDD2", penwidth=2.0];
+
+    // --- 处理步骤 (直角矩形) ---
+    create_app [label="创建 QApplication 对象\napp(argc, argv)", shape="box"];
+
+    set_meta [label="设置应用元数据\n· setApplicationName(\"VehicleManager\")\n· setApplicationVersion(\"1.0\")\n· setOrganizationName(\"SWE25\")", shape="box"];
+
+    create_mainwindow [label="创建 MainWindow 实例\nMainWindow w;", shape="box"];
+
+    init_window [label="MainWindow 构造函数\n· setWindowTitle(\"车辆管理系统\")\n· resize(1100, 650)\n· setupUI()\n· updateStatusBar()", shape="box"];
+
+    setup_ui [label="setupUI() 搭建界面\n· setupMenuBar()      → 文件/车辆/统计/设置/帮助 菜单\n· setupToolBar()      → 添加/编辑/删除/统计 快捷按钮\n· setupCentralWidget()→ 搜索面板(QRadioButton×4) + 车辆表格(QTableWidget)\n· setupStatusBar()    → 总计/大客车/小轿车/卡车 计数标签", shape="box"];
+
+    show_window [label="显示主窗口\nw.show()", shape="box"];
+
+    enter_event_loop [label="进入 Qt 事件循环\napp.exec()", shape="box"];
+
+    idle [label="等待并分派事件\n(用户交互 / 系统消息)", shape="box"];
+
+    // --- 判断分支 (菱形) ---
+    window_closing [label="窗口关闭\n信号触发?", shape="diamond"];
+
+    has_unsaved [label="m_unsavedChanges\n== true ?", shape="diamond"];
+
+    save_choice [label="用户\n选择?", shape="diamond"];
+
+    // --- 处理步骤 ---
+    show_prompt [label="弹出确认对话框\n\"当前有未保存的修改，\n是否保存后再退出？\"", shape="box"];
+
+    do_save [label="执行保存\n· 若已有路径 → 直接保存\n· 若无路径 → 弹出另存为对话框", shape="box"];
+
+    save_result [label="保存是否\n成功?", shape="diamond"];
+
+    accept_close [label="接受关闭请求\n窗口关闭", shape="box"];
+
+    cancel_ignore [label="忽略关闭请求\n(event->ignore())\n返回事件循环", shape="box"];
+
+    exit_loop [label="事件循环返回\nexec() 结束", shape="box"];
+
+    // ========== 连线定义 ==========
+
+    // --- 初始化阶段 ---
+    start -> create_app;
+    create_app -> set_meta;
+    set_meta -> create_mainwindow;
+    create_mainwindow -> init_window;
+    init_window -> setup_ui;
+    setup_ui -> show_window;
+    show_window -> enter_event_loop;
+
+    // --- 事件循环 ---
+    enter_event_loop -> idle;
+
+    // 循环: 等待事件 → 处理 → 等待下一事件
+    idle -> window_closing;
+
+    // 不是关闭事件 → 处理其他事件 → 继续等待
+    window_closing -> idle [label=" 否\n(处理事件后继续)", penwidth=1.8];
+
+    // 是关闭事件 → 检查未保存标记
+    window_closing -> has_unsaved [label=" 是", penwidth=1.8];
+
+    // --- 关闭判断 ---
+    // 无未保存修改 → 直接关闭
+    has_unsaved -> accept_close [label=" 否\n(无修改)", penwidth=1.8];
+
+    // 有未保存修改 → 弹出对话框
+    has_unsaved -> show_prompt [label=" 是\n(有修改)", penwidth=1.8];
+
+    show_prompt -> save_choice;
+
+    // 三路分支
+    save_choice -> do_save      [label=" 保存", penwidth=1.8];
+    save_choice -> accept_close [label=" 不保存", penwidth=1.8];
+    save_choice -> cancel_ignore [label=" 取消", penwidth=1.8];
+
+    // 保存子流程
+    do_save -> save_result;
+    save_result -> accept_close  [label=" 成功", penwidth=1.8];
+    save_result -> cancel_ignore [label=" 失败\n(用户取消保存)", penwidth=1.8];
+
+    // 取消 → 回到事件循环
+    cancel_ignore -> idle;
+
+    // 接受关闭 → 窗口关闭 → 事件循环退出
+    accept_close -> exit_loop;
+    exit_loop -> end;
+
+    // ========== 图注 ==========
+    {
+        rank=sink;
+        legend_start [label="开始/结束", shape="box", style="rounded,filled", fillcolor="#C8E6C9", fontsize=9, width=1.2];
+        legend_process [label="处理步骤", shape="box", fontsize=9, width=1.2];
+        legend_decision [label="判断分支", shape="diamond", fontsize=9, width=1.2];
+        legend_edge [label="流程方向", shape="plaintext", fontsize=9];
+
+        legend_start -> legend_process -> legend_decision [style=invis];
+        legend_decision -> legend_edge [style=invis];
+    }
+}

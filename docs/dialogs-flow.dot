@@ -1,0 +1,228 @@
+// VMS 对话框层 — AddVehicleDialog / EditVehicleDialog / StatisticsDialog 流程图
+// 渲染命令: dot -Tpng docs/dialogs-flow.dot -o docs/dialogs-flow.png
+
+digraph VMS_Dialogs {
+    // ========== 全局设置 ==========
+    rankdir=TB;
+    fontname="Noto Sans CJK SC";
+    bgcolor="#FFFFFF";
+
+    node [fontname="Noto Sans CJK SC", fontsize=10.5];
+    edge [fontname="Noto Sans CJK SC", fontsize=9.5, penwidth=1.8];
+
+    // #####################################################################
+    // 第一部分：AddVehicleDialog — 添加车辆对话框
+    // #####################################################################
+
+    // ---- 1a: 构造与初始化 ----
+
+    add_entry [label="MainWindow 创建\nAddVehicleDialog(existingIds, parent)", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=2.0];
+
+    add_init [label="构造函数:\n· setWindowTitle(\"添加车辆\")\n· setMinimumWidth(480)\n· m_existingIds = existingIds → QSet", shape="box"];
+
+    add_setup [label="setupUI()\n构建表单界面", shape="box"];
+
+    add_common [label="通用信息区 (QGroupBox + QFormLayout)\n├ m_idEdit          QLineEdit     → placeholder \"必填且不可重复\"\n├ m_plateEdit       QLineEdit     → placeholder \"如 京A12345\"\n├ m_mfgEdit         QLineEdit     → placeholder \"如 一汽大众\"\n├ m_purchaseEdit    QDateEdit     → 日历弹窗, yyyy-MM-dd, 默认今天\n├ m_typeCombo       QComboBox     → 大客车(Bus)/小轿车(Car)/卡车(Truck)\n├ m_totalKmSpin     QDoubleSpinBox → 0~9999999, 1位小数, km\n├ m_fuelConsumptionSpin QDoubleSpinBox → 0~99.9999, 4位小数, L/km\n├ m_roadFeeSpin     QDoubleSpinBox → 0~999999, 2位小数, 元\n├ m_accumulatedCostSpin QDoubleSpinBox → 0~99999999, 2位小数, 元\n└ m_maintenanceSpin QDoubleSpinBox → 0~999999, 2位小数, 元/月 (默认2000)", shape="box"];
+
+    add_stacked [label="类别专属信息区 (QStackedWidget 3页)\n├ 第0页(Bus):  m_passengerSpin  QSpinBox 1~300, 默认50人\n├ 第1页(Car):  m_trunkCombo     QComboBox 三厢(3)/两厢(2)\n└ 第2页(Truck): m_loadSpin       QDoubleSpinBox 0.1~500吨, 默认10吨", shape="box"];
+
+    add_signals [label="信号连接:\n· connect(m_typeCombo, currentIndexChanged\n          → onTypeChanged)  类别切换\n· connect(m_buttonBox, accepted\n          → lambda 校验)    确定按钮\n· connect(m_buttonBox, rejected\n          → reject)         取消按钮", shape="box"];
+
+    add_auto_id [label="自动生成默认编号:\nm_lastAutoId = generateDefaultId(\n    m_typeCombo->currentIndex())\nm_idEdit->setText(m_lastAutoId)", shape="box"];
+
+    // ---- 1b: 类别切换 ----
+
+    add_type_change [label="用户切换类别\nonTypeChanged(index)", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    add_switch_page [label="m_stacked->setCurrentIndex(index)\n切换到对应专属信息页", shape="box"];
+
+    add_switch_maint [label="自动更新维护费默认值:\nindex=0(Bus)   → 2000.0\nindex=1(Car)   → 1000.0\nindex=2(Truck) → 1500.0", shape="box"];
+
+    add_check_auto [label="编号是否需要\n自动更新?\n(m_idEdit == m_lastAutoId\n|| m_idEdit 为空)", shape="diamond"];
+
+    add_regen_id [label="重新生成默认编号:\nm_lastAutoId = generateDefaultId(index)\nm_idEdit->setText(m_lastAutoId)", shape="box"];
+
+    add_keep_id [label="保留用户\n手动输入的编号", shape="box"];
+
+    // ---- 1c: 编号生成算法 ----
+
+    add_gen_id [label="generateDefaultId(typeIndex)\n自动生成唯一编号", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=2.0];
+
+    add_gen_prefix [label="根据类型确定前缀:\n· index=0 → \"BUS\"\n· index=1 → \"CAR\"\n· index=2 → \"TRUCK\"", shape="box"];
+
+    add_gen_scan [label="遍历 m_existingIds\n筛选以 \"PREFIX-\" 开头的编号\n提取数字部分 → 找最大值 maxNum", shape="box"];
+
+    add_gen_format [label="生成新编号:\n\"PREFIX-XXX\"\n(maxNum + 1, 3位补零)\n例: BUS-001, CAR-003, TRUCK-012", shape="box"];
+
+    add_gen_return [label="返回自动生成的编号", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // ---- 1d: 输入校验 ----
+
+    add_accept [label="用户点击\"添加\"按钮\n触发 accepted lambda", shape="box", style="rounded,filled", fillcolor="#FFEBEE", penwidth=2.0];
+
+    add_val_id [label="m_idEdit->text()\n.trimmed().isEmpty() ?", shape="diamond"];
+
+    add_val_id_err [label="QMessageBox::warning\n\"车辆编号不能为空！\"\nreturn (阻止关闭)", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    add_val_plate [label="plate.length()\n< 7 || > 8 ?\n(非空时检查)", shape="diamond"];
+
+    add_val_plate_err [label="QMessageBox::warning\n\"车牌号必须合法！\"\nreturn (阻止关闭)", shape="box", style="filled", fillcolor="#FFCDD2"];
+
+    add_val_ok [label="accept()\n对话框返回 Accepted", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // ---- 1e: createVehicle 工厂方法 ----
+
+    add_create [label="MainWindow 调用\ndlg.createVehicle()", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=2.0];
+
+    add_create_type [label="m_typeCombo\n->currentIndex() ?", shape="diamond"];
+
+    add_create_bus [label="auto *bus = new Bus()\nbus->setMaxPassengers(\n    m_passengerSpin->value())\nv = bus", shape="box"];
+    add_create_car [label="auto *car = new Car()\ncar->setTrunkType(\n    m_trunkCombo->currentData().toInt())\nv = car", shape="box"];
+    add_create_truck [label="auto *truck = new Truck()\ntruck->setMaxLoad(\n    m_loadSpin->value())\nv = truck", shape="box"];
+
+    add_create_common [label="设置通用属性 (统一接口):\nv->setId(...)\nv->setPlateNumber(...)\nv->setManufacturer(...)\nv->setPurchaseDate(...)\nv->setTotalKm(...)\nv->setFuelConsumption(...)\nv->setRoadFee(...)\nv->setAccumulatedCost(...)\nv->setBasicMaintenance(...)", shape="box"];
+
+    add_create_return [label="return v\n(Vehicle* 指针\n调用方拥有所有权)", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // ========== AddVehicleDialog 连线 ==========
+
+    add_entry -> add_init;
+    add_init -> add_setup;
+    add_setup -> add_common;
+    add_common -> add_stacked;
+    add_stacked -> add_signals;
+    add_signals -> add_auto_id;
+
+    // 类别切换
+    add_type_change -> add_switch_page;
+    add_switch_page -> add_switch_maint;
+    add_switch_maint -> add_check_auto;
+    add_check_auto -> add_regen_id [label=" 是\n(自动/空编号)", penwidth=1.8];
+    add_check_auto -> add_keep_id [label=" 否\n(用户已手动改)", penwidth=1.8];
+
+    // 编号生成
+    add_gen_id -> add_gen_prefix;
+    add_gen_prefix -> add_gen_scan;
+    add_gen_scan -> add_gen_format;
+    add_gen_format -> add_gen_return;
+
+    // 校验
+    add_accept -> add_val_id;
+    add_val_id -> add_val_id_err [label=" 是\n(编号为空)", penwidth=1.8];
+    add_val_id -> add_val_plate [label=" 否", penwidth=1.8];
+    add_val_plate -> add_val_plate_err [label=" 是\n(车牌不合法)", penwidth=1.8];
+    add_val_plate -> add_val_ok [label=" 否\n(通过校验)", penwidth=1.8];
+
+    // createVehicle
+    add_create -> add_create_type;
+    add_create_type -> add_create_bus   [label=" 0 (Bus)", penwidth=1.8];
+    add_create_type -> add_create_car   [label=" 1 (Car)", penwidth=1.8];
+    add_create_type -> add_create_truck [label=" 2 (Truck)", penwidth=1.8];
+    add_create_bus -> add_create_common;
+    add_create_car -> add_create_common;
+    add_create_truck -> add_create_common;
+    add_create_common -> add_create_return;
+
+    // #####################################################################
+    // 第二部分：EditVehicleDialog — 编辑车辆对话框
+    // #####################################################################
+
+    edit_entry [label="MainWindow 创建\nEditVehicleDialog(v, parent)\nv = 当前选中的 Vehicle*", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=2.0];
+
+    edit_init [label="构造函数:\n· setWindowTitle(\"编辑车辆\")\n· setMinimumWidth(480)\n· setupUI(v)  (构建界面+预填)", shape="box"];
+
+    edit_setup [label="setupUI(v)\n(表单结构与 AddVehicleDialog\n完全相同, 见第一部分)", shape="box"];
+
+    edit_populate [label="populateFields(v)\n预填当前车辆数据", shape="box", style="rounded,filled", fillcolor="#E8EAF6", penwidth=2.0];
+
+    edit_pop_common [label="预填通用字段:\nm_idEdit->setText(v->id())\nm_plateEdit->setText(v->plateNumber())\nm_mfgEdit->setText(v->manufacturer())\nm_purchaseEdit->setDate(v->purchaseDate())\nm_totalKmSpin->setValue(v->totalKm())\nm_fuelConsumptionSpin->setValue(v->fuelConsumption())\nm_roadFeeSpin->setValue(v->roadFee())\nm_accumulatedCostSpin->setValue(v->accumulatedCost())\nm_maintenanceSpin->setValue(v->basicMaintenance())", shape="box"];
+
+    edit_pop_type [label="设置类型下拉框:\nswitch(v->vehicleType())\n  Bus → idx=0, Car → idx=1, Truck → idx=2\nm_typeCombo->setCurrentIndex(idx)", shape="box"];
+
+    edit_pop_special [label="预填专属字段 (dynamic_cast):\nif (auto *bus = dynamic_cast<Bus*>(v))\n  → m_passengerSpin->setValue(bus->maxPassengers())\nif (auto *car = dynamic_cast<Car*>(v))\n  → m_trunkCombo->setCurrentIndex(trunkType==2?1:0)\nif (auto *truck = dynamic_cast<Truck*>(v))\n  → m_loadSpin->setValue(truck->maxLoad())", shape="box"];
+
+    edit_pop_done [label="预填完成\n等待用户修改", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    edit_type_change [label="用户切换类别\nonTypeChanged(index)\n(与 AddVehicleDialog 相同:\n切换页面 + 更新维护费默认值\n但 ·不· 自动生成编号)", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=1.5, fontsize=9.5];
+
+    // edit 校验
+    edit_accept [label="用户点击\"保存修改\"\n触发 accepted lambda\n(校验规则与添加完全相同)", shape="box", style="rounded,filled", fillcolor="#FFEBEE", penwidth=2.0];
+
+    edit_val_ok [label="accept()\n对话框返回 Accepted", shape="box", style="filled", fillcolor="#C8E6C9"];
+
+    // edit createVehicle
+    edit_create [label="MainWindow 调用\ndlg.createVehicle()\n(工厂逻辑与 AddVehicleDialog\n完全相同, 见第一部分)", shape="box", style="rounded,filled", fillcolor="#FFF9C4", penwidth=1.5, fontsize=9.5];
+
+    // ========== EditVehicleDialog 连线 ==========
+
+    edit_entry -> edit_init;
+    edit_init -> edit_setup;
+    edit_setup -> edit_populate;
+
+    edit_populate -> edit_pop_common;
+    edit_pop_common -> edit_pop_type;
+    edit_pop_type -> edit_pop_special;
+    edit_pop_special -> edit_pop_done;
+
+    edit_accept -> edit_val_ok;
+
+    // #####################################################################
+    // 第三部分：StatisticsDialog — 统计对话框
+    // #####################################################################
+
+    stats_entry [label="MainWindow 调用\nonStatistics()\n→ 创建 StatisticsDialog(manager, this)", shape="box", style="rounded,filled", fillcolor="#C8E6C9", penwidth=2.0];
+
+    stats_get [label="Statistics s = manager.getStatistics()\n获取各类型计数:\n· s.total, s.busCount, s.carCount, s.truckCount", shape="box"];
+
+    stats_calc [label="计算各类型平均月费用:\n遍历 manager.allVehicles()\n对每个 v 调用 v->monthlyTotalCost(fuelPrice)\n按类型累加 → 除以对应计数\n→ avgBusCost / avgCarCost / avgTruckCost", shape="box"];
+
+    stats_setup [label="setupUI(s, avgBusCost,\navgCarCost, avgTruckCost)", shape="box"];
+
+    // 区域1: 数量统计
+    stats_section1 [label="区域1: 车辆数量统计 (QGroupBox + QHBoxLayout)\n4 个 QLabel (HTML 格式):\n├ 总计 → s.total (深灰色 #333, 24px 大字)\n├ 大客车 → s.busCount (绿色 #4CAF50)\n├ 小轿车 → s.carCount (蓝色 #2196F3)\n└ 卡车 → s.truckCount (橙色 #FF9800)", shape="box"];
+
+    // 区域2: 饼图
+    stats_total_zero [label="s.total\n> 0 ?", shape="diamond"];
+
+    stats_pie [label="区域2: 类别占比 — 甜甜圈饼图 (QtCharts)\n· QPieSeries: setHoleSize(0.40) → 甜甜圈效果\n· 3个切片: 大客车(#4CAF50) / 小轿车(#2196F3) / 卡车(#FF9800)\n· slice->setLabelVisible(true) + setLabelBrush(white)\n· QChart: 标题\"车辆类别分布\" + 底部图例 + 动画\n· QChartView: 抗锯齿渲染, 最小高度280px", shape="box"];
+
+    // 区域3: 柱状图
+    stats_bar [label="区域3: 数据对比 — 分组柱状图 (QtCharts)\n· QBarSet \"车辆数量\" (#42A5F5 蓝色): [busCount, carCount, truckCount]\n· QBarSet \"平均月费用\" (#FF7043 橙色): [avgBusCost, avgCarCost, avgTruckCost]\n· QBarSeries: 标签可见, 外侧显示数值\n· QBarCategoryAxis: X轴 = 大客车/小轿车/卡车\n· QValueAxis: Y轴 = 数量/元\n· QChart: 标题\"各类型数量与平均月费用对比\" + 动画\n· QChartView: 抗锯齿渲染, 最小高度280px", shape="box"];
+
+    stats_empty [label="无数据提示:\nQLabel \"暂无车辆数据，请先添加车辆。\"\n灰色 (#999), 16px, 居中, 40px内边距", shape="box", style="filled", fillcolor="#FFF9C4"];
+
+    stats_btn [label="确定按钮:\nQDialogButtonBox::Ok\nconnect(accepted → accept)", shape="box"];
+
+    stats_done [label="对话框构建完成\n等待用户点击确定", shape="box", style="rounded,filled", fillcolor="#E3F2FD", penwidth=2.0];
+
+    // ========== StatisticsDialog 连线 ==========
+
+    stats_entry -> stats_get;
+    stats_get -> stats_calc;
+    stats_calc -> stats_setup;
+
+    stats_setup -> stats_section1;
+    stats_section1 -> stats_total_zero;
+
+    stats_total_zero -> stats_pie [label=" 是\n(有数据)", penwidth=1.8];
+    stats_total_zero -> stats_empty [label=" 否\n(无数据)", penwidth=1.8];
+
+    stats_pie -> stats_bar;
+    stats_bar -> stats_btn;
+    stats_empty -> stats_btn;
+    stats_btn -> stats_done;
+
+    // #####################################################################
+    // 图注
+    // #####################################################################
+    {
+        rank=sink;
+        leg_start  [label="入口", shape="box", style="rounded,filled", fillcolor="#C8E6C9", fontsize=9, width=1.1];
+        leg_proc   [label="处理", shape="box", fontsize=9, width=1.1];
+        leg_decision [label="判断", shape="diamond", fontsize=9, width=1.1];
+        leg_err    [label="阻止/错误", shape="box", style="filled", fillcolor="#FFCDD2", fontsize=9, width=1.1];
+        leg_result [label="结果", shape="box", style="rounded,filled", fillcolor="#E3F2FD", fontsize=9, width=1.1];
+
+        leg_start -> leg_proc -> leg_decision -> leg_err -> leg_result [style=invis];
+    }
+}

@@ -30,8 +30,13 @@ bool VehicleManager::addVehicle(Vehicle *vehicle, QString &errorMsg) {
         errorMsg = QStringLiteral("编号 ") + vehicle->id() + QStringLiteral(" 已存在，添加失败！");
         return false;
     }
+    // 检查车牌号非空
+    if (vehicle->plateNumber().isEmpty()) {
+        errorMsg = QStringLiteral("车牌号不能为空！");
+        return false;
+    }
     // 检查车牌号唯一
-    if (!vehicle->plateNumber().isEmpty() && findByPlateNumber(vehicle->plateNumber())) {
+    if (findByPlateNumber(vehicle->plateNumber())) {
         errorMsg = QStringLiteral("车牌号 ") + vehicle->plateNumber() + QStringLiteral(" 已被使用，添加失败！");
         return false;
     }
@@ -114,9 +119,13 @@ bool VehicleManager::updateVehicle(const QString &oldId, Vehicle *newData, QStri
         errorMsg = QStringLiteral("新编号 ") + newData->id() + QStringLiteral(" 已被使用！");
         return false;
     }
+    // 检查车牌号非空
+    if (newData->plateNumber().isEmpty()) {
+        errorMsg = QStringLiteral("车牌号不能为空！");
+        return false;
+    }
     // 如果车牌号变了，检查新车牌是否与其他车重复
     if (target->plateNumber() != newData->plateNumber()
-        && !newData->plateNumber().isEmpty()
         && findByPlateNumber(newData->plateNumber())) {
         errorMsg = QStringLiteral("新车牌号 ") + newData->plateNumber() + QStringLiteral(" 已被使用！");
         return false;
@@ -154,7 +163,13 @@ Statistics VehicleManager::getStatistics() const {
 int VehicleManager::count() const { return m_vehicles.size(); }
 bool VehicleManager::isEmpty() const { return m_vehicles.isEmpty(); }
 int VehicleManager::maxCapacity() const { return m_maxCapacity; }
-void VehicleManager::setMaxCapacity(int cap) { m_maxCapacity = cap; }
+void VehicleManager::setMaxCapacity(int cap) {
+    if (cap < 1)
+        cap = 1;
+    if (cap < m_vehicles.size())
+        cap = m_vehicles.size();
+    m_maxCapacity = cap;
+}
 bool VehicleManager::isFull() const { return m_vehicles.size() >= m_maxCapacity; }
 
 // ---- 油价 ----
@@ -175,6 +190,7 @@ bool VehicleManager::saveToFile(const QString &filePath, QString &errorMsg) cons
 
     QJsonObject root;
     root["fuelPrice"] = m_fuelPrice;
+    root["maxCapacity"] = m_maxCapacity;
     root["vehicles"] = arr;
 
     QJsonDocument doc(root);
@@ -215,6 +231,7 @@ bool VehicleManager::loadFromFile(const QString &filePath, QString &errorMsg) {
     } else if (doc.isObject()) {
         QJsonObject root = doc.object();
         m_fuelPrice = root["fuelPrice"].toDouble(m_fuelPrice);
+        m_maxCapacity = root["maxCapacity"].toInt(m_maxCapacity);
         arr = root["vehicles"].toArray();
     } else {
         errorMsg = QStringLiteral("文件格式错误：顶层必须是数组或对象！");
